@@ -3,7 +3,7 @@ from flask import Flask, request, jsonify, render_template_string
 import requests
 
 # UPDATE ONLY THIS LINE FROM YOUR COLAB OUTPUT
-NGROK_BASE = "https://YOUR-LATEST-NGROK-URL.ngrok-free.dev"  # ← PASTE HERE
+NGROK_BASE = "https://ona-overcritical-extrinsically.ngrok-free.dev"  # ← PASTE HERE
 
 OLLAMA_CHAT_URL = f"{NGROK_BASE}/api/chat"
 USERNAME = "dgeurts"
