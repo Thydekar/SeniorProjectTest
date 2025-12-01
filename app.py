@@ -1,104 +1,101 @@
-# app.py — FINAL WORKING VERSION (Dec 2025)
-from flask import Flask, request, jsonify, render_template_string
+# app.py — STREAMLIT VERSION (run in Colab or locally)
+import streamlit as st
 import requests
+import json
+import time
 
-# UPDATE ONLY THIS LINE FROM YOUR COLAB OUTPUT
-NGROK_BASE = "https://ona-overcritical-extrinsically.ngrok-free.dev"  # ← PASTE HERE
-
-OLLAMA_CHAT_URL = f"{NGROK_BASE}/api/chat"
+# === CONFIG — ONLY CHANGE THESE IF YOU USE DIFFERENT AUTH / MODEL ===
 USERNAME = "dgeurts"
 PASSWORD = "thaidakar21"
+MODEL_NAME = "gemma3"   # or "gemma3:27b", "gemma3:9b", etc.
 
-# Try these model names in order (most common gemma3 tags)
-MODELS_TO_TRY = ["gemma3", "gemma3:27b", "gemma3:9b", "gemma3:latest"]
+# Auto-detect ngrok URL from the running tunnel in the same session
+try:
+    import json, os
+    ngrok_tunnels = json.load(open("/root/.config/ngrok/ngrok.yml"))["tunnels"]
+    public_url = [t["public_url"] for t in ngrok_tunnels if "http" in t["proto"]][0]
+    OLLAMA_URL = f"{public_url}/api/chat"
+    st.success(f"Connected to gemma3 @ {public_url.split('//')[1]}")
+except:
+    # Fallback — paste manually if auto-detect fails
+    OLLAMA_URL = st.text_input("ngrok URL (e.g. https://abc123.ngrok-free.dev)", 
+                               value="https://ona-overcritical-extrinsically.ngrok-free.dev")
+    OLLAMA_URL = f"{OLLAMA_URL}/api/chat"
 
-app = Flask(__name__)
-chat_history = []
-
-HTML = """
-<!DOCTYPE html>
-<html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>gemma3 • Colab Live</title>
+# === Streamlit UI ===
+st.set_page_config(page_title="gemma3 · Colab Live", layout="centered")
+st.markdown("""
 <style>
-    body{margin:0;background:#0d1117;height:100vh;display:flex;flex-direction:column;font-family:system-ui;color:#c9d1d9;}
-    #msgs{flex:1;overflow-y:auto;padding:20px;}
-    .msg{max-width:80%;margin:10px 0;padding:14px 20px;border-radius:18px;line-height:1.5;word-wrap:break-word;}
-    .user{background:#2f81f7;color:white;margin-left:auto;}
-    .assistant{background:#30363d;color:#c9d1d9;}
-    .error{background:#5a1e2a;color:#ff7b72;}
-    #in{padding:15px;display:flex;gap:10px;background:#0d1117;border-top:1px solid #30363d;}
-    input{flex:1;padding:14px 20px;background:#0d1117;border:1px solid #30363d;border-radius:30px;color:white;font-size:16px;}
-    button{padding:0 30px;background:#238636;color:white;border:none;border-radius:30px;cursor:pointer;}
+    .main {background-color: #0d1117; color: #c9d1d9;}
+    .stChatMessage {background-color: #161b22; border-radius: 12px; padding: 12px; margin: 8px 0;}
+    .stTextInput > div > div > input {background-color: #21262d; color: white; border-radius: 20px;}
+    .stButton > button {background: #238636; color: white; border-radius: 20px; border: none;}
+    .error {background: #5a1e2a; color: #ffa7a7; padding: 12px; border-radius: 12px;}
 </style>
-</head><body>
-<div id="msgs"></div>
-<div id="in">
-    <input type="text" id="i" placeholder="Type a message..." autocomplete="off">
-    <button onclick="send()">Send</button>
-</div>
-<script>
-    const m=document.getElementById("msgs"), i=document.getElementById("i"); i.focus();
-    function add(t,c){const d=document.createElement("div"); d.className="msg "+c; d.textContent=t; m.appendChild(d); m.scrollTop=m.scrollHeight;}
-    async function send(){
-        const msg=i.value.trim(); if(!msg)return;
-        add(msg,"user"); i.value="";
-        const r=await fetch("/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({msg})});
-        const j=await r.json();
-        add(j.reply || "ERROR: "+j.error, j.reply?"assistant":"error");
-    }
-    i.addEventListener("keypress",e=>{if(e.key==="Enter")send();});
-    add("gemma3 loading...","assistant");
-</script>
-</body></html>
-"""
+""", unsafe_allow_html=True)
 
-@app.route("/")
-def index():
-    return render_template_string(HTML)
+st.title("gemma3 · Live from Colab")
+st.caption("Powered by Ollama + ngrok · Full conversation history")
 
-@app.route("/chat", methods=["POST"])
-def chat():
-    user_msg = request.json.get("msg","").strip()
-    if not user_msg:
-        return jsonify({"error": "empty message"})
+# Initialize chat history
+if "messages" not in st.session_state:
+    st.session_state.messages = [{"role": "assistant", "content": "Hello! I'm gemma3 running in Google Colab. Ask me anything!"}]
 
-    chat_history.append({"role": "user", "content": user_msg})
+# Display chat
+for msg in st.session_state.messages:
+    with st.chat_message(msg["role"]):
+        st.write(msg["content"])
 
-    headers = {
-        "Content-Type": "application/json",
-        "Accept": "application/json"
-    }
+# User input
+if prompt := st.chat_input("Type your message..."):
+    st.session_state.messages.append({"role": "user", "content": prompt})
+    with st.chat_message("user"):
+        st.write(prompt)
 
-    for model in MODELS_TO_TRY:
-        payload = {
-            "model": model,
-            "messages": chat_history,
-            "stream": False
-        }
+    with st.chat_message("assistant"):
+        message_placeholder = st.empty()
+        full_response = ""
+
         try:
-            r = requests.post(
-                OLLAMA_CHAT_URL,
+            payload = {
+                "model": MODEL_NAME,
+                "messages": st.session_state.messages,
+                "stream": False
+            }
+            with requests.post(
+                OLLAMA_URL,
                 json=payload,
                 auth=(USERNAME, PASSWORD),
-                headers=headers,
-                timeout=180,
-                verify=False   # required for free ngrok
-            )
-            if r.status_code == 200:
-                reply = r.json().get("message", {}).get("content", "").strip()
-                if reply:
-                    chat_history.append({"role": "assistant", "content": reply})
-                    return jsonify({"reply": reply})
-            elif r.status_code == 404:
-                continue  # try next model name
+                timeout=300,
+                verify=False,
+                stream=False
+            ) as r:
+                r.raise_for_status()
+                response = r.json()
+                reply = response.get("message", {}).get("content", "").strip()
+
+                if not reply:
+                    reply = "No response from model (empty reply)"
+
+                full_response = reply
+                message_placeholder.write(full_response)
+
+        except requests.exceptions.ConnectionError:
+            full_response = "Cannot connect – your ngrok tunnel is down or wrong URL"
+            message_placeholder.error(full_response)
+        except requests.exceptions.Timeout:
+            full_response = "Timeout (5 min) – gemma3 is thinking too hard or frozen"
+            message_placeholder.error(full_response)
+        except requests.exceptions.HTTPError as e:
+            if e.response.status_code == 401:
+                full_response = "Wrong username/password (401)"
+            elif e.response.status_code == 404:
+                full_response = "Model not found – did you pull gemma3?"
             else:
-                return jsonify({"error": f"HTTP {r.status_code}: {r.text[:200]}"})
+                full_response = f"HTTP {e.response.status_code}: {e.response.text[:200]}"
+            message_placeholder.error(full_response)
         except Exception as e:
-            return jsonify({"error": f"Request failed: {str(e)}"})
+            full_response = f"Unexpected error: {str(e)}"
+            message_placeholder.error(full_response)
 
-    return jsonify({"error": "All model names failed — check ollama list in Colab"})
-
-if __name__ == "__main__":
-    print("gemma3 chat LIVE")
-    print(f"URL: {OLLAMA_CHAT_URL}")
-    app.run(host="0.0.0.0", port=5000)
+        st.session_state.messages.append({"role": "assistant", "content": full_response})
