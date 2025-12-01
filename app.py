@@ -1,94 +1,87 @@
-# app.py
+# app.py - Ollama + gemma3 via your ngrok tunnel with auth
 from flask import Flask, request, jsonify, render_template_string
 import requests
 
-# ============ CONFIGURATION ============
-OLLAMA_IP = "192.168.1.100"      # CHANGE THIS
-OLLAMA_PORT = 11434
-MODEL_NAME = "llama3.2"          # CHANGE THIS
-# =======================================
+# ============ YOUR CONFIG (already set for you) ============
+NGROK_BASE = "https://ona-overcritical-extrinsically.ngrok-free.dev"
+OLLAMA_CHAT_URL = f"{NGROK_BASE}/api/chat"      # correct streaming chat endpoint
+MODEL_NAME = "gemma3"                           # or "gemma3:27b", "gemma3:9b", etc. - whatever you pulled
 
-OLLAMA_URL = f"http://{OLLAMA_IP}:{OLLAMA_PORT}/api/chat"
+# ngrok requires Basic Auth
+USERNAME = "dgeurts"
+PASSWORD = "thaidakar21"
+
+# ===============================================================
 
 app = Flask(__name__)
-chat_history = []
+chat_history = []  # persistent conversation
 
-# Full HTML + CSS + JS directly in the Python file (no templates folder needed)
-HTML_TEMPLATE = """
+HTML = """
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ollama Chat • {{ model }}</title>
+    <title>gemma3 • ngrok chat</title>
     <style>
-        body { font-family: system-ui, sans-serif; margin:0; background:#f0f2f5; height:100vh; display:flex; justify-content:center; }
-        #chatbox { width:100%; max-width:900px; background:white; display:flex; flex-direction:column; height:100vh; box-shadow:0 0 20px rgba(0,0,0,0.1); }
-        #messages { flex:1; overflow-y:auto; padding:20px; }
-        .message { max-width:80%; margin:10px 0; padding:12px 18px; border-radius:20px; line-height:1.5; }
-        .user { background:#007bff; color:white; align-self:flex-end; margin-left:auto; border-bottom-right-radius:4px; }
-        .assistant { background:#e9ecef; color:#1c1e21; align-self:flex-start; border-bottom-left-radius:4px; }
-        #input-area { padding:15px; background:#f8f9fa; border-top:1px solid #ddd; display:flex; gap:10px; }
-        #user-input { flex:1; padding:14px 20px; border:1px solid #ccc; border-radius:30px; font-size:16px; }
-        button { padding:0 24px; background:#007bff; color:white; border:none; border-radius:30px; cursor:pointer; font-size:16px; }
-        button:hover { background:#0056b3; }
+        body {font-family:system-ui;margin:0;background:#0d1117;height:100vh;display:flex;justify-content:center;}
+        #box {width:100%;max-width:900px;background:#161b22;display:flex;flex-direction:column;height:100vh;}
+        #msgs {flex:1;overflow-y:auto;padding:20px;color:#c9d1d9;}
+        .msg {max-width:80%;margin:15px 0;padding:12px 18px;border-radius:18px;line-height:1.5;word-wrap:break-word;}
+        .user {background:#2f81f7;color:white;align-self:flex-end;margin-left:auto;border-bottom-right-radius:4px;}
+        .assistant {background:#30363d;color:#c9d1d9;align-self:flex-start;border-bottom-left-radius:4px;}
+        #inputarea {padding:15px;display:flex;gap:10px;background:#0d1117;border-top:1px solid #30363d;}
+        input {flex:1;padding:14px 20px;background:#0d1117;border:1px solid #30363d;border-radius:30px;color:white;font-size:16px;}
+        button {padding:0 28px;background:#238636;color:white;border:none;border-radius:30px;cursor:pointer;font-weight:600;}
+        button:hover {background:#2ea043;}
     </style>
 </head>
 <body>
-    <div id="chatbox">
-        <div id="messages"></div>
-        <div id="input-area">
-            <input type="text" id="user-input" placeholder="Type a message..." autocomplete="off">
+    <div id="box">
+        <div id="msgs"></div>
+        <div id="inputarea">
+            <input type="text" id="txt" placeholder="Ask gemma3 anything..." autocomplete="off">
             <button onclick="send()">Send</button>
         </div>
     </div>
-
     <script>
-        const messages = document.getElementById("messages");
-        const input = document.getElementById("user-input");
+        const msgs = document.getElementById("msgs");
+        const input = document.getElementById("txt");
         input.focus();
-
-        function add(msg, sender) {
-            const div = document.createElement("div");
-            div.className = "message " + sender;
-            div.textContent = msg;
-            messages.appendChild(div);
-            messages.scrollTop = messages.scrollHeight;
+        function add(text, who) {
+            const d = document.createElement("div");
+            d.className = "msg " + who;
+            d.textContent = text;
+            msgs.appendChild(d);
+            msgs.scrollTop = msgs.scrollHeight;
         }
-
         async function send() {
-            const text = input.value.trim();
-            if (!text) return;
-            add(text, "user");
+            const msg = input.value.trim();
+            if (!msg) return;
+            add(msg, "user");
             input.value = "";
-
-            const resp = await fetch("/chat", {
-                method: "POST",
-                headers: {"Content-Type": "application/json"},
-                body: JSON.stringify({message: text})
-            });
+            const resp = await fetch("/chat", {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({msg})});
             const data = await resp.json();
-            add(data.reply || "Error: " + (data.error || "Unknown"), "assistant");
+            add(data.reply || "Error: "+(data.error||"???"), "assistant");
         }
-
-        input.addEventListener("keypress", e => { if (e.key === "Enter") send(); });
-        add("Hello! I'm running {{ model }} via Ollama. Ask me anything!", "assistant");
+        input.addEventListener("keypress", e=>{if(e.key==="Enter")send();});
+        add("gemma3 is ready! (via your ngrok tunnel)", "assistant");
     </script>
 </body>
 </html>
 """
 
 @app.route("/")
-def index():
-    return render_template_string(HTML_TEMPLATE, model=MODEL_NAME)
+def home():
+    return render_template_string(HTML)
 
 @app.route("/chat", methods=["POST"])
 def chat():
-    user_message = request.json.get("message")
-    if not user_message:
+    user_msg = request.json.get("msg", "").strip()
+    if not user_msg:
         return jsonify({"error": "Empty message"}), 400
 
-    chat_history.append({"role": "user", "content": user_message})
+    chat_history.append({"role": "user", "content": user_msg})
 
     try:
         payload = {
@@ -96,9 +89,12 @@ def chat():
             "messages": chat_history,
             "stream": False
         }
-        r = requests.post(OLLAMA_URL, json=payload, timeout=300)
+        auth = (USERNAME, PASSWORD)
+
+        r = requests.post(OLLAMA_CHAT_URL, json=payload, auth=auth, timeout=300)
         r.raise_for_status()
         reply = r.json()["message"]["content"]
+
         chat_history.append({"role": "assistant", "content": reply})
         return jsonify({"reply": reply})
 
@@ -106,6 +102,8 @@ def chat():
         return jsonify({"error": str(e)}), 500
 
 if __name__ == "__main__":
-    print(f"Ollama Chat UI → http://localhost:5000")
-    print(f"Connected to Ollama at {OLLAMA_URL} using model '{MODEL_NAME}'")
+    print("gemma3 web chat started!")
+    print(f"   Model : {MODEL_NAME}")
+    print(f"   Ollama: {OLLAMA_CHAT_URL}")
+    print("   Open → http://127.0.0.1:5000")
     app.run(host="0.0.0.0", port=5000, debug=False)
