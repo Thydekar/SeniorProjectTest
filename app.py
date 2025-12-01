@@ -9,7 +9,7 @@ from requests.auth import HTTPBasicAuth
 NGROK_URL = st.secrets.get("NGROK_URL", "https://paste-your-latest-kaggle-ngrok-url-here.ngrok-free.dev")
 # Example: https://a1b2c3d4-12-34-567-890.ngrok-free.dev
 
-OLLAMA_CHAT_URL = f"{NGROK_URL}/api/chat"
+OLLAMA_CHAT_URL = f"https://ona-overcritical-extrinsically.ngrok-free.dev/api/chat"
 
 # Your ngrok basic auth (same as in Kaggle notebook)
 USERNAME = "dgeurts"
