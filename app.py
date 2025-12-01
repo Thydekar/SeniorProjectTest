@@ -1,101 +1,116 @@
-# app.py — STREAMLIT VERSION (run in Colab or locally)
+# app.py — FOR GITHUB → STREAMLIT CLOUD (connects to Kaggle ngrok + gemma3)
 import streamlit as st
 import requests
-import json
-import time
+from requests.auth import HTTPBasicAuth
 
-# === CONFIG — ONLY CHANGE THESE IF YOU USE DIFFERENT AUTH / MODEL ===
+# ──────────────────────────────────────────────────────────────
+# UPDATE THIS URL EVERY TIME YOU START A NEW KAGGLE NOTEBOOK
+# ──────────────────────────────────────────────────────────────
+NGROK_URL = st.secrets.get("NGROK_URL", "https://paste-your-latest-kaggle-ngrok-url-here.ngrok-free.dev")
+# Example: https://a1b2c3d4-12-34-567-890.ngrok-free.dev
+
+OLLAMA_CHAT_URL = f"{NGROK_URL}/api/chat"
+
+# Your ngrok basic auth (same as in Kaggle notebook)
 USERNAME = "dgeurts"
 PASSWORD = "thaidakar21"
-MODEL_NAME = "gemma3"   # or "gemma3:27b", "gemma3:9b", etc.
 
-# Auto-detect ngrok URL from the running tunnel in the same session
-try:
-    import json, os
-    ngrok_tunnels = json.load(open("/root/.config/ngrok/ngrok.yml"))["tunnels"]
-    public_url = [t["public_url"] for t in ngrok_tunnels if "http" in t["proto"]][0]
-    OLLAMA_URL = f"{public_url}/api/chat"
-    st.success(f"Connected to gemma3 @ {public_url.split('//')[1]}")
-except:
-    # Fallback — paste manually if auto-detect fails
-    OLLAMA_URL = st.text_input("ngrok URL (e.g. https://abc123.ngrok-free.dev)", 
-                               value="https://ona-overcritical-extrinsically.ngrok-free.dev")
-    OLLAMA_URL = f"{OLLAMA_URL}/api/chat"
+# Model name — change only if you pulled a different tag
+MODEL_NAME = "gemma3"
+# ──────────────────────────────────────────────────────────────
 
-# === Streamlit UI ===
-st.set_page_config(page_title="gemma3 · Colab Live", layout="centered")
+st.set_page_config(page_title="gemma3 · Kaggle Live", layout="centered", menu_items=None)
+
+# Dark GitHub-style theme
 st.markdown("""
 <style>
-    .main {background-color: #0d1117; color: #c9d1d9;}
-    .stChatMessage {background-color: #161b22; border-radius: 12px; padding: 12px; margin: 8px 0;}
-    .stTextInput > div > div > input {background-color: #21262d; color: white; border-radius: 20px;}
-    .stButton > button {background: #238636; color: white; border-radius: 20px; border: none;}
-    .error {background: #5a1e2a; color: #ffa7a7; padding: 12px; border-radius: 12px;}
+    .main {background: #0d1117; color: #c9d1d9;}
+    .stChatMessage {margin: 8px 0;}
+    section[data-testid="stSidebar"] {background: #161b22;}
+    .stTextInput > div > div > input {background: #21262d; color: white; border-radius: 16px;}
+    .stButton > button {background: #238636; color: white; border-radius: 16px; border: none; height: 48px;}
+    .error-box {background: #5a1e2a; color: #ffa7a7; padding: 12px; border-radius: 12px; font-family: monospace;}
+    .footer {text-align: center; color: #8b949e; font-size: 0.8em; margin-top: 40px;}
 </style>
 """, unsafe_allow_html=True)
 
-st.title("gemma3 · Live from Colab")
-st.caption("Powered by Ollama + ngrok · Full conversation history")
+st.title("gemma3 · Live from Kaggle")
+st.caption("Ollama + ngrok tunnel → full conversation history · powered by Google Gemma 3")
 
-# Initialize chat history
+# Sidebar info
+with st.sidebar:
+    st.header("Backend")
+    st.code(OLLAMA_CHAT_URL.split("/api")[0], language=None)
+    st.caption(f"Model: `{MODEL_NAME}`")
+    st.caption("Status: Connected" if NGROK_URL else "No URL configured")
+    st.markdown("---")
+    st.markdown("**Instructions**")
+    st.markdown("1. Run your Kaggle notebook  \n2. Copy the new ngrok URL  \n3. Paste it in Streamlit secrets → `NGROK_URL`  \n4. Redeploy")
+
+# Initialize chat
 if "messages" not in st.session_state:
-    st.session_state.messages = [{"role": "assistant", "content": "Hello! I'm gemma3 running in Google Colab. Ask me anything!"}]
+    st.session_state.messages = [
+        {"role": "assistant", "content": "gemma3 is ready! Ask me anything. This instance is running live from a Kaggle notebook via ngrok."}
+    ]
 
-# Display chat
+# Display chat history
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.write(msg["content"])
 
 # User input
-if prompt := st.chat_input("Type your message..."):
+if prompt := st.chat_input("Type your message here..."):
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.write(prompt)
 
     with st.chat_message("assistant"):
-        message_placeholder = st.empty()
-        full_response = ""
-
+        placeholder = st.empty()
         try:
             payload = {
                 "model": MODEL_NAME,
                 "messages": st.session_state.messages,
                 "stream": False
             }
+
             with requests.post(
-                OLLAMA_URL,
+                OLLAMA_CHAT_URL,
                 json=payload,
-                auth=(USERNAME, PASSWORD),
+                auth=HTTPBasicAuth(USERNAME, PASSWORD),
                 timeout=300,
-                verify=False,
-                stream=False
+                verify=False
             ) as r:
                 r.raise_for_status()
-                response = r.json()
-                reply = response.get("message", {}).get("content", "").strip()
+                data = r.json()
+                reply = data.get("message", {}).get("content", "").strip()
 
                 if not reply:
-                    reply = "No response from model (empty reply)"
+                    reply = "Empty response from model"
 
-                full_response = reply
-                message_placeholder.write(full_response)
+                placeholder.write(reply)
+                st.session_state.messages.append({"role": "assistant", "content": reply})
 
         except requests.exceptions.ConnectionError:
-            full_response = "Cannot connect – your ngrok tunnel is down or wrong URL"
-            message_placeholder.error(full_response)
+            error = "Cannot reach Kaggle – ngrok tunnel is down or wrong URL"
+            placeholder.error(error)
+            st.session_state.messages.append({"role": "assistant", "content": error})
         except requests.exceptions.Timeout:
-            full_response = "Timeout (5 min) – gemma3 is thinking too hard or frozen"
-            message_placeholder.error(full_response)
+            error = "Timeout (5 min) – gemma3 is slow or frozen"
+            placeholder.error(error)
+            st.session_state.messages.append({"role": "assistant", "content": error})
         except requests.exceptions.HTTPError as e:
             if e.response.status_code == 401:
-                full_response = "Wrong username/password (401)"
+                error = "401 Unauthorized – wrong username/password"
             elif e.response.status_code == 404:
-                full_response = "Model not found – did you pull gemma3?"
+                error = "404 Model not found – did you run `ollama pull gemma3`?"
             else:
-                full_response = f"HTTP {e.response.status_code}: {e.response.text[:200]}"
-            message_placeholder.error(full_response)
+                error = f"HTTP {e.response.status_code} – {e.response.text[:200]}"
+            placeholder.error(error)
+            st.session_state.messages.append({"role": "assistant", "content": error})
         except Exception as e:
-            full_response = f"Unexpected error: {str(e)}"
-            message_placeholder.error(full_response)
+            error = f"Unexpected error: {str(e)}"
+            placeholder.error(error)
+            st.session_state.messages.append({"role": "assistant", "content": error})
 
-        st.session_state.messages.append({"role": "assistant", "content": full_response})
+# Footer
+st.markdown('<div class="footer">gemma3 · Kaggle + ngrok + Streamlit · 2025</div>', unsafe_allow_html=True)
