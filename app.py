@@ -1,4 +1,4 @@
-# app.py — Spartan AI Demo — Final Professional Version
+# app.py — Spartan AI Demo — Final Clean & Professional
 import streamlit as st
 import requests
 from requests.auth import HTTPBasicAuth
@@ -10,7 +10,7 @@ from PIL import Image
 # ──────────────────────── EDIT ONLY THESE ────────────────────────
 NGROK_URL = "https://ona-overcritical-extrinsically.ngrok-free.dev"
 
-MODEL_ASSIGNMENT_GEN = "gemma3"
+MODEL_ASSIGNMENT_GEN = "spartan-assignment"
 MODEL_GRADER         = "spartan-grader"
 MODEL_PLAGIARISM     = "spartan-detector"
 MODEL_STUDENT_CHAT   = "spartan-student"
@@ -22,33 +22,34 @@ PASSWORD = "thaidakar21"
 
 st.set_page_config(page_title="Spartan AI Demo", layout="centered")
 
-# Clean dark theme + big bold sidebar buttons
+# Clean, modern dark theme + fixed input bar + bold sidebar
 st.markdown("""
 <style>
-    .main {background: #0d1117; color: #c9d1d9;}
+    .main {background: #0d1117; color: #c9d1d9; padding-bottom: 100px;}
     .stApp {background: #0d1117;}
     section[data-testid="stSidebar"] {background: #161b22; border-right: 1px solid #30363d;}
     
-    /* Sidebar buttons — large, bold, black & blue */
+    /* Sidebar buttons — large, bold, elegant */
     .stButton > button {
-        width: 100%; margin: 10px 0; background: #21262d; color: white;
-        border: 1px solid #30363d; border-radius: 14px; padding: 16px;
-        font-weight: 700; font-size: 18px; transition: all 0.2s;
+        width: 100%; margin: 12px 0; background: #21262d; color: white;
+        border: 1px solid #30363d; border-radius: 16px; padding: 18px;
+        font-weight: 700; font-size: 19px; transition: all 0.2s;
     }
     .stButton > button:hover {background: #21262d; border-color: #30363d;}
-    .stButton > button:active,
-    .stButton > button[data-active="true"] {
+    .stButton > button:active {
         background: #58a6ff !important; color: black !important; border-color: #58a6ff;
     }
     
-    .stTextInput > div > div > input {background: #21262d; color: white; border: 1px solid #30363d; border-radius: 16px;}
-    .uploaded-image {border-radius: 10px; margin: 10px 0;}
-    .footer {text-align: center; color: #8b949e; font-size: 0.85em; margin-top: 60px; padding: 20px;}
+    /* Hide file uploader by default */
+    .uploadedFile {display: none;}
+    .stChatInput {position: fixed; bottom: 0; left: 0; right: 0; background: #0d1117; padding: 20px; z-index: 9999; border-top: 1px solid #30363d;}
+    .stChatMessage {margin-bottom: 20px;}
+    .footer {text-align: center; color: #8b949e; font-size: 0.85em; padding: 20px;}
     h1, h2 {color: #58a6ff;}
 </style>
 """, unsafe_allow_html=True)
 
-# ────────────────────────── SIDEBAR WITH HOME + TOOLS ──────────────────────────
+# ────────────────────────── SIDEBAR ──────────────────────────
 with st.sidebar:
     st.title("Spartan AI Demo")
 
@@ -57,21 +58,21 @@ with st.sidebar:
         st.session_state.messages = []
         st.rerun()
 
-    st.markdown("**Tools**")
+    st.markdown("**Tools**", unsafe_allow_html=True)
 
     tools = [
-        ("Assignment Generation", "assignment"),
-        ("Assignment Grader", "grader"),
-        ("AI Content/Plagiarism Detector", "detector"),
-        ("Student Chatbot", "student")
+        "Assignment Generation",
+        "Assignment Grader",
+        "AI Content/Plagiarism Detector",
+        "Student Chatbot"
     ]
 
-    for label, key in tools:
-        if st.button(label, key=key):
-            st.session_state.mode = label
-            if "messages" not in st.session_state or st.session_state.get("last_mode") != label:
+    for tool in tools:
+        if st.button(tool, key=tool):
+            st.session_state.mode = tool
+            if "messages" not in st.session_state or st.session_state.get("last_mode") != tool:
                 st.session_state.messages = [{"role": "assistant", "content": "Hello! How can I help you today?"}]
-                st.session_state.last_mode = label
+                st.session_state.last_mode = tool
             st.rerun()
 
     st.markdown("---")
@@ -102,12 +103,7 @@ if mode == "Home":
     """)
 
     st.markdown("### Available Tools")
-    st.markdown("""
-    • Assignment Generation  
-    • Assignment Grader  
-    • AI Content/Plagiarism Detector  
-    • Student Chatbot (safe & helpful)
-    """)
+    st.markdown("• Assignment Generation  \n• Assignment Grader  \n• AI Content/Plagiarism Detector  \n• Student Chatbot")
 
     st.markdown("<div class='footer'>Spartan AI • Senior Project • Dallin Geurts • 2025</div>", unsafe_allow_html=True)
     st.stop()
@@ -120,21 +116,35 @@ st.title(f"{mode}")
 if "messages" not in st.session_state:
     st.session_state.messages = [{"role": "assistant", "content": "Hello! How can I help you today?"}]
 
-# Display chat history
+# Display messages
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
+        if msg.get("image"):
+            st.image(msg["image"], width=300)
 
-# Chat input with file upload in the bar
+# Fixed input bar at bottom
 with st.container():
-    cols = st.columns([0.07, 1])
-    with cols[0]:
-        uploaded_file = st.file_uploader("", type=["png", "jpg", "jpeg"], label_visibility="collapsed")
-    with cols[1]:
-        prompt = st.chat_input("Ask a question...")
+    st.markdown("<div style='height: 100px;'></div>", unsafe_allow_html=True)  # spacer
 
-# Process upload + message
-if uploaded_file or prompt:
+# Paperclip + input
+col1, col2 = st.columns([0.1, 0.9])
+with col1:
+    if st.button("Paperclip", key="clip"):
+        st.session_state.show_uploader = True
+with col2:
+    prompt = st.chat_input("Ask a question...")
+
+# Hidden file uploader
+uploaded_file = None
+if st.session_state.get("show_uploader"):
+    uploaded_file = st.file_uploader("Upload image", type=["png", "jpg", "jpeg"], key="uploader")
+    if uploaded_file is None:
+        st.session_state.show_uploader = False
+        st.rerun()
+
+# Process input
+if prompt or uploaded_file:
     ocr_text = ""
     image_preview = None
 
@@ -143,31 +153,30 @@ if uploaded_file or prompt:
         image_preview = image.copy()
         image_preview.thumbnail((300, 300))
         with st.chat_message("user"):
-            st.image(image_preview, caption="Image attached", use_column_width=False, output_format="PNG")
+            st.image(image_preview, width=300)
             if prompt:
                 st.markdown(prompt)
-            else:
-                st.markdown("*Image uploaded*")
 
-        with st.spinner("Reading text from image..."):
+        with st.spinner("Reading image..."):
             try:
                 ocr_text = pytesseract.image_to_string(image)
             except:
-                ocr_text = "[OCR failed — image too blurry or unsupported]"
+                ocr_text = ""
 
-    # Build internal message (hidden from user)
-    internal_message = ""
+    # Build internal message
+    internal_msg = ""
     if ocr_text:
-        internal_message += f"uploaded-image-text{{{ocr_text.strip()}}}"
+        internal_msg += f"uploaded-image-text{{{ocr_text.strip()}}}"
     if prompt:
-        internal_message += f"user-query{{{prompt.strip()}}}"
+        internal_msg += f"user-query{{{prompt.strip()}}}"
 
-    # Show only user-facing message
-    user_display = prompt or "*Image uploaded*"
-
-    st.session_state.messages.append({"role": "user", "content": user_display})
-    if uploaded_file:
-        st.session_state.messages[-1]["image"] = image_preview  # for display only
+    # User sees clean version
+    user_display = prompt or "Image uploaded"
+    st.session_state.messages.append({
+        "role": "user",
+        "content": user_display,
+        "image": image_preview if uploaded_file else None
+    })
 
     # Send to AI
     with st.chat_message("assistant"):
@@ -177,7 +186,7 @@ if uploaded_file or prompt:
         try:
             payload = {
                 "model": current_model,
-                "messages": st.session_state.messages[:-1] + [{"role": "user", "content": internal_message}],
+                "messages": st.session_state.messages[:-1] + [{"role": "user", "content": internal_msg or user_display}],
                 "stream": True
             }
 
@@ -202,8 +211,8 @@ if uploaded_file or prompt:
                             continue
                 placeholder.markdown(full)
 
-        except Exception as e:
-            placeholder.error("Connection lost — please try again.")
+        except Exception:
+            placeholder.error("Connection issue — please try again.")
 
         st.session_state.messages.append({"role": "assistant", "content": full})
 
