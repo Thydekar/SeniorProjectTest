@@ -1,4 +1,4 @@
-# app.py - Spartan AI Demo - FINAL with perfect Thinking → typing cursor
+# app.py - Spartan AI Demo - FINAL with "New Chat" button
 import streamlit as st
 import requests
 from requests.auth import HTTPBasicAuth
@@ -35,7 +35,7 @@ OCR_CONFIG = r"--oem 3 --psm 6"
 
 st.set_page_config(page_title="Spartan AI Demo", layout="wide")
 
-# CSS + Thinking animation
+# CSS + Thinking animation + New Chat button
 st.markdown("""
 <style>
     body, .css-18e3th9 {background-color: #0d1117 !important; color: #c9d1d9 !important;}
@@ -54,15 +54,18 @@ st.markdown("""
         font-weight: bold;
         color: #58a6ff;
     }
-    .dot {
-        animation: blink 1.4s infinite both;
-    }
+    .dot {animation: blink 1.4s infinite both;}
     .dot:nth-child(1) {animation-delay: 0s;}
     .dot:nth-child(2) {animation-delay: 0.2s;}
     .dot:nth-child(3) {animation-delay: 0.4s;}
-    @keyframes blink {
-        0%, 80%, 100% {opacity: 0.3;}
-        20% {opacity: 1;}
+    @keyframes blink {0%, 80%, 100% {opacity: 0.3;} 20% {opacity: 1;}}
+    
+    /* NEW CHAT BUTTON - top left */
+    .new-chat-btn {
+        position: fixed;
+        top: 20px;
+        left: 20px;
+        z-index: 9999;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -105,7 +108,17 @@ if st.session_state.mode == "Home":
     st.markdown('<div class="footer-text">Spartan AI • Senior Project • Dallin Geurts • 2025</div>', unsafe_allow_html=True)
     st.stop()
 
-# Main
+# === NEW CHAT BUTTON (only on tool pages) ===
+if st.session_state.mode != "Home":
+    st.markdown('<div class="new-chat-btn">', unsafe_allow_html=True)
+    if st.button("New Chat", key="new_chat_top"):
+        st.session_state.messages = [{"role":"assistant","content":"Hello! How can I help you today?"}]
+        st.session_state.pending_ocr_text = None
+        st.session_state.uploaded_file_name = None
+        st.rerun()
+    st.markdown('</div>', unsafe_allow_html=True)
+
+# Main tool
 current_tool = st.session_state.mode
 model = MODEL_MAP[current_tool]
 st.title(current_tool)
@@ -154,7 +167,6 @@ if uploaded_file and uploaded_file.name != st.session_state.uploaded_file_name:
 # User input
 user_input = st.chat_input("Type your message here...")
 if user_input:
-    # Build message
     if st.session_state.pending_ocr_text:
         content = f"uploaded-file-text{{{st.session_state.pending_ocr_text}}}\nuser-query{{{user_input}}}"
         st.session_state.pending_ocr_text = None
@@ -165,7 +177,7 @@ if user_input:
     with st.chat_message("user"):
         st.markdown(user_input)
 
-    # AI RESPONSE — PERFECT THINKING → TYPING CURSOR
+    # AI RESPONSE — Thinking → typing cursor
     with st.chat_message("assistant"):
         thinking_placeholder = st.empty()
         thinking_placeholder.markdown(
@@ -196,7 +208,7 @@ if user_input:
                         if first_token:
                             thinking_placeholder.empty()
                             first_token = False
-                        response_placeholder.markdown(full_response + "▋", unsafe_allow_html=True)
+                        response_placeholder.markdown(full_response + "cursor", unsafe_allow_html=True)
                         time.sleep(0.01)
                 response_placeholder.markdown(full_response)
                 thinking_placeholder.empty()
