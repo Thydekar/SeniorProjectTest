@@ -1,4 +1,4 @@
-# app.py - Spartan AI Demo - FINAL with "New Chat" button next to chat bar
+# app.py - Spartan AI Demo - FINAL with "New Chat" button + blinking cursor
 import streamlit as st
 import requests
 from requests.auth import HTTPBasicAuth
@@ -24,7 +24,6 @@ except ImportError:
 NGROK_URL = "https://ona-overcritical-extrinsically.ngrok-free.dev"
 MODEL_MAP = {
     "Assignment Generation": "spartan-generator",
-    ",
     "Assignment Grader": "spartan-grader",
     "AI Content/Plagiarism Detector": "spartan-detector",
     "Student Chatbot": "spartan-student",
@@ -36,7 +35,7 @@ OCR_CONFIG = r"--oem 3 --psm 6"
 
 st.set_page_config(page_title="Spartan AI Demo", layout="wide")
 
-# CSS — New Chat button now at bottom with chat bar
+# CSS + New Chat button + animations
 st.markdown("""
 <style>
     body, .css-18e3th9 {background-color: #0d1117 !important; color: #c9d1d9 !important;}
@@ -49,40 +48,31 @@ st.markdown("""
     footer {visibility: hidden; height: 40px;}
     .footer-text {text-align: center; color: #8b949e; font-size: 0.85em; padding: 20px 0;}
 
+    /* New Chat button - top left */
+    .new-chat-btn {
+        position: fixed;
+        top: 20px;
+        left: 20px;
+        z-index: 9999;
+        background: #238636 !important;
+        color: white !important;
+        border: none !important;
+        border-radius: 8px !important;
+        padding: 10px 16px !important;
+        font-weight: 600 !important;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+    }
+    .new-chat-btn:hover {
+        background: #2ea043 !important;
+    }
+
     /* Thinking animation */
     .thinking {display: inline-block; font-size: 1.2em; font-weight: bold; color: #58a6ff;}
     .dot {animation: blink 1.4s infinite both;}
     .dot:nth-child(1) {animation-delay: 0s;}
     .dot:nth-child(2) {animation-delay: 0.2s;}
     .dot:nth-child(3) {animation-delay: 0.4s;}
-    @keyframes blink {0%, 80%, 100% {opacity: 0.3;} 20% {opacity: 1;}}
-
-    /* Bottom bar with New Chat button + input */
-    .bottom-bar {
-        position: fixed;
-        bottom: 0;
-        left: 0;
-        right: 0;
-        background: #0d1117;
-        border-top: 1px solid #30363d;
-        padding: 16px 20px;
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        z-index: 9999;
-    }
-    .new-chat-bottom {
-        background: #238636 !important;
-        color: white !important;
-        border: none !important;
-        border-radius: 8px !important;
-        padding: 10px 20px !important;
-        font-weight: 600 !important;
-        white-space: nowrap;
-    }
-    .new-chat-bottom:hover {
-        background: #2ea043 !important;
-    }
+    @keyframes blink {0%, 80%, 100% {opacity: 0.3;} 20% {opacity: 1;}
 </style>
 """, unsafe_allow_html=True)
 
@@ -90,7 +80,15 @@ st.markdown("""
 if "mode" not in st.session_state: st.session_state.mode = "Home"
 if "messages" not in st.session_state: st.session_state.messages = []
 if "pending_ocr_text" not in st.session_state: st.session_state.pending_ocr_text = None
-if "uploaded_file_name" not in st.session_state.uploaded_file_name = None
+if "uploaded_file_name" not in st.session_state: st.session_state.uploaded_file_name = None
+
+# === NEW CHAT BUTTON (appears on every tool page) ===
+if st.session_state.mode != "Home":
+    if st.button("New Chat", key="new_chat_btn", help="Start a fresh conversation"):
+        st.session_state.messages = [{"role": "assistant", "content": "Hello! How can I help you today?"}]
+        st.session_state.pending_ocr_text = None
+        st.session_state.uploaded_file_name = None
+        st.rerun()
 
 # Sidebar
 with st.sidebar:
@@ -142,7 +140,7 @@ uploaded_file = st.file_uploader(
     type=["pdf","docx","txt","png","jpg","jpeg","gif","bmp","tiff"]
 )
 
-# Extract text (same as before)
+# Extract text
 if uploaded_file and uploaded_file.name != st.session_state.uploaded_file_name:
     with st.spinner("Extracting text from file..."):
         extracted_text = ""
@@ -172,28 +170,9 @@ if uploaded_file and uploaded_file.name != st.session_state.uploaded_file_name:
             st.error(f"Error reading file: {e}")
             st.session_state.pending_ocr_text = None
 
-# === NEW: Bottom bar with "New Chat" button + chat input ===
-if st.session_state.mode != "Home":
-    st.markdown("<div class='bottom-bar'>", unsafe_allow_html=True)
-    
-    col1, col2 = st.columns([1, 6])
-    
-    with col1:
-        if st.button("New Chat", key="bottom_new_chat"):
-            st.session_state.messages = [{"role": "assistant", "content": "Hello! How can I help you today?"}]
-            st.session_state.pending_ocr_text = None
-            st.session_state.uploaded_file_name = None
-            st.rerun()
-    
-    with col2:
-        user_input = st.chat_input("Type your message here...")
-    
-    st.markdown("</div>", unsafe_allow_html=True)
-else:
-    user_input = st.chat_input("Type your message here...")
-
-# === Message handling (only runs when not on Home) ===
-if st.session_state.mode != "Home" and user_input:
+# User input
+user_input = st.chat_input("Type your message here...")
+if user_input:
     if st.session_state.pending_ocr_text:
         content = f"uploaded-file-text{{{st.session_state.pending_ocr_text}}}\nuser-query{{{user_input}}}"
         st.session_state.pending_ocr_text = None
@@ -204,7 +183,7 @@ if st.session_state.mode != "Home" and user_input:
     with st.chat_message("user"):
         st.markdown(user_input)
 
-    # AI RESPONSE — PERFECT THINKING → BLINKING CURSOR
+    # AI RESPONSE — PERFECT: Thinking → disappears → typing with blinking cursor
     with st.chat_message("assistant"):
         thinking_placeholder = st.empty()
         thinking_placeholder.markdown(
@@ -235,11 +214,11 @@ if st.session_state.mode != "Home" and user_input:
                         if first_token:
                             thinking_placeholder.empty()
                             first_token = False
-                        response_placeholder.markdown(full_response + "█", unsafe_allow_html=True)  # blinking cursor
+                        response_placeholder.markdown(full_response + "▋", unsafe_allow_html=True)
                         time.sleep(0.01)
                 response_placeholder.markdown(full_response)
                 thinking_placeholder.empty()
-        except:
+        except Exception:
             thinking_placeholder.empty()
             response_placeholder.markdown("Sorry, I couldn't connect right now.")
 
