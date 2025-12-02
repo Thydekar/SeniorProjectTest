@@ -1,4 +1,4 @@
-# app.py - Spartan AI Demo - Reworked Multi-Tool AI Interface with File Upload
+# app.py - Spartan AI Demo - Multi-Tool AI Interface with Persistent Compact File Upload
 
 import streamlit as st
 import requests
@@ -25,7 +25,7 @@ OCR_CONFIG = r"--oem 3 --psm 6"
 # Page config
 st.set_page_config(page_title="Spartan AI Demo", layout="wide")
 
-# Custom CSS for styling
+# Custom CSS for styling and compact uploader
 st.markdown("""
 <style>
     /* General background and text */
@@ -48,16 +48,7 @@ st.markdown("""
         color: #58a6ff !important;
     }
 
-    /* File uploader */
-    .stFileUploader > div {
-        background: #161b22 !important;
-        border: 1px solid #30363d !important;
-        border-radius: 8px !important;
-        padding: 8px !important;
-        color: #c9d1d9 !important;
-    }
-
-    /* Chat bubbles - user and assistant */
+    /* Chat bubbles */
     .stChatMessage.user {
         background-color: #f85149 !important;
         border-radius: 12px !important;
@@ -69,7 +60,7 @@ st.markdown("""
         color: black !important;
     }
 
-    /* Footer styling */
+    /* Footer */
     footer {
         visibility: hidden;
         height: 40px;
@@ -79,6 +70,34 @@ st.markdown("""
         color: #8b949e;
         font-size: 0.85em;
         padding: 20px 0;
+    }
+
+    /* Make the file uploader smaller and less tall */
+    .stFileUploader > div {
+        background: #161b22 !important;
+        border: 1px solid #30363d !important;
+        border-radius: 8px !important;
+        padding: 6px 8px !important;
+        color: #c9d1d9 !important;
+        max-width: 350px;
+        font-size: 0.9em !important;
+    }
+    /* Shrink button inside uploader */
+    .stFileUploader button {
+        padding: 4px 8px !important;
+        font-size: 0.85em !important;
+    }
+
+    /* Container to keep uploader + input together */
+    .uploader-input-container {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        max-width: 1000px;
+    }
+    /* Make chat input expand */
+    .uploader-input-container > div.chat-input {
+        flex-grow: 1;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -129,8 +148,24 @@ model = MODEL_MAP[current_tool]
 
 st.title(current_tool)
 
-# File uploader (always visible)
-uploaded_file = st.file_uploader("Upload an image for OCR (optional)", type=["png", "jpg", "jpeg"])
+# Display chat history
+for msg in st.session_state.messages:
+    role = msg["role"]
+    content = msg.get("display_text", msg["content"])
+    with st.chat_message(role):
+        st.markdown(content)
+
+# ---- Persistent file uploader + chat input together ----
+# Use container with flex to keep uploader and input side-by-side or stacked
+
+container = st.container()
+
+with container:
+    cols = st.columns([1, 4])
+    with cols[0]:
+        uploaded_file = st.file_uploader("Upload image for OCR", type=["png", "jpg", "jpeg"], key="file_uploader")
+    with cols[1]:
+        user_input = st.chat_input("Type your message here...")
 
 # Process OCR if new file uploaded
 if uploaded_file and uploaded_file.name != st.session_state.uploaded_file_name:
@@ -146,16 +181,6 @@ if uploaded_file and uploaded_file.name != st.session_state.uploaded_file_name:
         st.error(f"Error processing image: {e}")
         st.session_state.pending_ocr_text = None
         st.session_state.uploaded_file_name = None
-
-# Display chat history
-for msg in st.session_state.messages:
-    role = msg["role"]
-    content = msg.get("display_text", msg["content"])
-    with st.chat_message(role):
-        st.markdown(content)
-
-# User input
-user_input = st.chat_input("Type your message here...")
 
 if user_input:
     # Compose user message content, including OCR text if available
