@@ -1,4 +1,4 @@
-# app.py — Spartan AI Demo — FINAL & FLAWLESS (Paperclip only, image once, perfect)
+# app.py — Spartan AI Demo — FINAL & PROFESSIONAL (Clean upload button)
 import streamlit as st
 import requests
 from requests.auth import HTTPBasicAuth
@@ -23,33 +23,24 @@ OCR_CONFIG = r"--oem 3 --psm 6"
 
 st.set_page_config(page_title="Spartan AI Demo", layout="centered")
 
-# CLEAN, PROFESSIONAL CSS — ONLY PAPERCLIP
 st.markdown("""
 <style>
     .main {background:#0d1117; color:#c9d1d9;}
-    section[data-testid="stSidebar"] {background:#161b22; border-right:1px solid #30363d;}
-    
-    /* Hide ALL default file uploader visuals */
-    section[data-testid="stFileUploader"] {display:none !important;}
-    .uploadedFileName, .stFileUploader label, div[data-testid="stFileUploaderDropzone"] {display:none !important;}
-    
-    /* Paperclip button */
-    .paperclip-button button {
-        background: transparent !important;
-        border: none !important;
-        padding: 8px 10px !important;
-        border-radius: 8px !important;
-        color: #8b949e !important;
-        font-size: 20px !important;
-    }
-    .paperclip-button button:hover {
-        background: #30363d !important;
-        color: #58a6ff !important;
-    }
-    
+    section[data-testid="stSidebar"] {background:#161b22;}
     .stButton>button {width:100%; margin:10px 0; background:#21262d; color:white;
         border:1px solid #30363d; border-radius:14px; padding:16px; font-weight:700; font-size:18px;}
     .stButton>button:active {background:#58a6ff !important; color:black !important;}
+    
+    /* Clean upload button */
+    .upload-btn button {
+        background:#238636 !important;
+        color:white !important;
+        border:none !important;
+        border-radius:12px !important;
+        padding:10px 16px !important;
+        font-size:14px !important;
+    }
+    .upload-btn button:hover {background:#2ea043 !important;}
     
     .footer {text-align:center; color:#8b949e; font-size:0.85em; margin-top:60px;}
     h1,h2 {color:#58a6ff;}
@@ -105,29 +96,27 @@ st.title(f"{mode}")
 if "messages" not in st.session_state:
     st.session_state.messages = [{"role":"assistant","content":"Hello! How can I help you today?"}]
 
-# Display chat history
+# Display chat
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg.get("display_text", msg.get("content", "")))
         if msg.get("image"):
             st.image(msg["image"], width=300)
 
-# === CUSTOM CHAT BAR WITH PAPERCLIP ONLY ===
-col1, col2, col3 = st.columns([0.6, 7, 1])
+# CLEAN UPLOAD BUTTON + CHAT INPUT
+col1, col2 = st.columns([1.5, 6])
 
 with col1:
-    # Hidden file uploader
-    uploaded_file = st.file_uploader("", type=["png","jpg","jpeg"], key="hidden_uploader", label_visibility="collapsed")
+    if st.button("Upload image", key="upload_btn"):
+        # Trigger hidden file uploader
+        st.file_uploader("Select image", type=["png","jpg","jpeg"], key="actual_uploader", label_visibility="collapsed")
 
 with col2:
     prompt = st.chat_input("Type your message...")
 
-with col3:
-    st.markdown('<div class="paperclip-button">', unsafe_allow_html=True)
-    st.markdown("Paperclip", unsafe_allow_html=True)  # This shows ONLY the icon
-    st.markdown('</div>', unsafe_allow_html=True)
+# Process uploaded file (from hidden uploader)
+uploaded_file = st.session_state.get("actual_uploader")
 
-# Process image when uploaded
 if uploaded_file is not None:
     if st.session_state.get("pending_image", {}).get("name") != uploaded_file.name:
         with st.spinner("Reading image..."):
@@ -145,14 +134,13 @@ if uploaded_file is not None:
                 st.session_state.pending_image = {"name": uploaded_file.name, "thumb": img_bytes, "ocr": ocr}
                 st.success("Image ready!")
             except:
-                st.error("Failed to read image.")
+                st.error("Failed to process image.")
                 st.session_state.pending_image = None
 
 # Handle message
 if prompt:
-    ollama_messages = []
-    for m in st.session_state.messages:
-        ollama_messages.append({"role": m["role"], "content": m.get("ai_content", m.get("content", ""))})
+    ollama_messages = [ {"role": m["role"], "content": m.get("ai_content", m.get("content", ""))} 
+                       for m in st.session_state.messages ]
 
     ai_text = ""
     display_text = prompt
@@ -160,14 +148,14 @@ if prompt:
 
     if st.session_state.get("pending_image"):
         ocr = st.session_state.pending_image["ocr"]
-        if ocr:
+        if ocr.strip():
             ai_text += f"uploaded-image-text{{{ocr}}}\n"
         image_data = st.session_state.pending_image["thumb"]
-        st.session_state.pending_image = None  # CONSUMED — never repeats
+        st.session_state.pending_image = None  # consumed
 
     ai_text += f"user-query{{{prompt}}}"
 
-    # Save message
+    # Save user message
     st.session_state.messages.append({
         "role": "user",
         "ai_content": ai_text,
@@ -201,7 +189,7 @@ if prompt:
                 placeholder.markdown(full)
         except:
             placeholder.error("Connection failed.")
-            full = "Sorry, I can't connect right now."
+            full = "Sorry, couldn't connect."
 
         st.session_state.messages.append({
             "role": "assistant",
