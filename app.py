@@ -11,7 +11,7 @@ import io
 # EDIT ONLY THESE
 NGROK_URL = "https://ona-overcritical-extrinsically.ngrok-free.dev"
 
-MODEL_ASSIGNMENT_GEN = "spartan-assignment"
+MODEL_ASSIGNMENT_GEN = "gemma3"
 MODEL_GRADER         = "spartan-grader"
 MODEL_PLAGIARISM     = "spartan-detector"
 MODEL_STUDENT_CHAT   = "spartan-student"
