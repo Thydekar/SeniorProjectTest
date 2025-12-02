@@ -1,4 +1,4 @@
-# app.py — Spartan AI Demo — Senior Project by Dallin Geurts
+# app.py — Spartan AI Demo — Final Version
 import streamlit as st
 import requests
 from requests.auth import HTTPBasicAuth
@@ -10,7 +10,7 @@ from PIL import Image
 # ──────────────────────── EDIT ONLY THESE ────────────────────────
 NGROK_URL = "https://ona-overcritical-extrinsically.ngrok-free.dev"
 
-MODEL_ASSIGNMENT_GEN = "gemma3"
+MODEL_ASSIGNMENT_GEN = "spartan-assignment"
 MODEL_GRADER         = "spartan-grader"
 MODEL_PLAGIARISM     = "spartan-detector"
 MODEL_STUDENT_CHAT   = "spartan-student"
@@ -22,19 +22,28 @@ PASSWORD = "thaidakar21"
 
 st.set_page_config(page_title="Spartan AI Demo", layout="centered")
 
-# Clean dark theme
+# Clean dark theme + black & blue buttons
 st.markdown("""
 <style>
     .main {background: #0d1117; color: #c9d1d9;}
     .stApp {background: #0d1117;}
     section[data-testid="stSidebar"] {background: #161b22; border-right: 1px solid #30363d;}
+    
+    /* Buttons: black background, white text */
     .stButton > button {
         width: 100%; margin: 8px 0; background: #21262d; color: white;
-        border: 1px solid #30363d; border-radius: 12px; padding: 12px;
-        font-weight: 600; font-size: 16px;
+        border: 1px solid #30363d; border-radius: 12px; padding: 14px;
+        font-weight: 600; font-size: 16px; transition: all 0.2s;
     }
-    .stButton > button:hover {background: #30363d; border-color: #58a6ff;}
-    .stButton > button:active, .stButton > button:focus {background: #238636; border-color: #58a6ff;}
+    }
+    /* Hover: no change */
+    .stButton > button:hover {background: #21262d; border-color: #30363d;}
+    /* Active/selected: blue background + black text */
+    .stButton > button:active,
+    .stButton > button[data-active="true"] {
+        background: #58a6ff !important; color: black !important; border-color: #58a6ff;
+    }
+    
     .stTextInput > div > div > input {background: #21262d; color: white; border: 1px solid #30363d; border-radius: 16px;}
     .ocr-box {background: #1e1e2e; padding: 14px; border-radius: 10px; border: 1px solid #30363d; font-size: 0.95em;}
     .footer {text-align: center; color: #8b949e; font-size: 0.85em; margin-top: 60px; padding: 20px;}
@@ -42,24 +51,39 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# ────────────────────────── SIDEBAR WITH BUTTONS ──────────────────────────
+# ────────────────────────── SIDEBAR WITH HOME + TOOLS ──────────────────────────
 with st.sidebar:
     st.title("Spartan AI Demo")
-    st.markdown("**Select Assistant**")
 
-    if st.button("Assignment Generation"):
-        st.session_state.mode = "Assignment Generation"
-    if st.button("Assignment Grader"):
-        st.session_state.mode = "Assignment Grader"
-    if st.button("AI Content/Plagiarism Detector"):
-        st.session_state.mode = "AI Content/Plagiarism Detector"
-    if st.button("Student Chatbot"):
-        st.session_state.mode = "Student Chatbot"
+    # Home Button (always first)
+    if st.button("Home", key="home_btn"):
+        st.session_state.mode = "Home"
+        st.session_state.messages = []
+        st.rerun()
+
+    st.markdown("**Tools**")
+
+    tools = [
+        ("Assignment Generation", "assignment"),
+        ("Assignment Grader", "grader"),
+        ("AI Content/Plagiarism Detector", "detector"),
+        ("Student Chatbot", "student")
+    ]
+
+    for label, key in tools:
+        if st.button(label, key=key):
+            st.session_state.mode = label
+            # Auto-start chat when tool selected
+            if "messages" not in st.session_state or st.session_state.get("last_mode") != label:
+                st.session_state.messages = [{"role": "assistant", "content": "Hello! How can I help you today?"}]
+                st.session_state.last_mode = label
+            st.rerun()
 
     st.markdown("---")
     st.caption("Senior Project by Dallin Geurts")
 
-mode = st.session_state.get("mode", "Assignment Generation")
+# Current mode
+mode = st.session_state.get("mode", "Home")
 
 model_map = {
     "Assignment Generation": MODEL_ASSIGNMENT_GEN,
@@ -67,10 +91,9 @@ model_map = {
     "AI Content/Plagiarism Detector": MODEL_PLAGIARISM,
     "Student Chatbot": MODEL_STUDENT_CHAT
 }
-current_model = model_map[mode]
 
 # ───────────────────────────── HOME PAGE ─────────────────────────────
-if len(st.session_state.get("messages", [])) == 0 and not st.session_state.get("started", False):
+if mode == "Home":
     st.title("Spartan AI Demo")
     st.markdown("### Empowering Education with Responsible AI")
 
@@ -84,7 +107,7 @@ if len(st.session_state.get("messages", [])) == 0 and not st.session_state.get("
     All models are fine-tuned to promote honesty, effort, and real learning.
     """)
 
-    st.markdown("### Tools")
+    st.markdown("### Available Tools")
     st.markdown("""
     • Assignment Generation  
     • Assignment Grader  
@@ -92,15 +115,11 @@ if len(st.session_state.get("messages", [])) == 0 and not st.session_state.get("
     • Student Chatbot (safe & helpful)
     """)
 
-    if st.button("Start Using Spartan AI", type="primary", use_container_width=True):
-        st.session_state.started = True
-        st.session_state.messages = [{"role": "assistant", "content": "Hello! How can I help you today?"}]
-        st.rerun()
-
     st.markdown("<div class='footer'>Spartan AI • Senior Project • Dallin Geurts • 2025</div>", unsafe_allow_html=True)
     st.stop()
 
 # ───────────────────────────── CHAT INTERFACE ─────────────────────────────
+current_model = model_map[mode]
 st.title(f"{mode}")
 
 # Image Upload + OCR
@@ -110,14 +129,18 @@ ocr_text = ""
 if uploaded_file:
     image = Image.open(uploaded_file)
     st.image(image, width=400)
-    with st.spinner("Extracting text..."):
-        ocr_text = pytesseract.image_to_string(image)
-        st.markdown(f"<div class='ocr-box'><strong>Text from image:</strong><br><pre>{ocr_text.strip()}</pre></div>", unsafe_allow_html=True)
+    with st.spinner("Extracting text from image..."):
+        try:
+            ocr_text = pytesseract.image_to_string(image)
+            st.markdown(f"<div class='ocr-box'><strong>Text from image:</strong><br><pre>{ocr_text.strip()}</pre></div>", unsafe_allow_html=True)
+        except:
+            st.error("Could not read image text.")
 
-# Chat history
+# Initialize messages for this tool
 if "messages" not in st.session_state:
     st.session_state.messages = [{"role": "assistant", "content": "Hello! How can I help you today?"}]
 
+# Display chat
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
@@ -161,15 +184,15 @@ if prompt or ocr_text:
                             token = chunk.get("message", {}).get("content", "")
                             full += token
                             placeholder.markdown(full + "▎")
-                            time.sleep(0.01)
+                            time.sleep(0.008)
                         except:
                             continue
                 placeholder.markdown(full)
 
         except Exception:
-            placeholder.error("I'm having trouble connecting right now. Please try again soon.")
+            placeholder.error("Connection issue — please try again in a moment.")
 
         st.session_state.messages.append({"role": "assistant", "content": full})
 
-# Footer — now properly indented
+# Footer
 st.markdown("<div class='footer'>Spartan AI • Senior Project • Dallin Geurts</div>", unsafe_allow_html=True)
