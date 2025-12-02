@@ -1,4 +1,4 @@
-# app.py - Spartan AI Demo - FINAL with "New Chat" button
+# app.py - Spartan AI Demo - FINAL with "New Chat" button + perfect cursor
 import streamlit as st
 import requests
 from requests.auth import HTTPBasicAuth
@@ -35,7 +35,7 @@ OCR_CONFIG = r"--oem 3 --psm 6"
 
 st.set_page_config(page_title="Spartan AI Demo", layout="wide")
 
-# CSS + Thinking animation + New Chat button
+# CSS + New Chat button + animations
 st.markdown("""
 <style>
     body, .css-18e3th9 {background-color: #0d1117 !important; color: #c9d1d9 !important;}
@@ -47,26 +47,35 @@ st.markdown("""
     .stChatMessage.assistant {background-color: #f0ad4e !important; border-radius: 12px !important; color: black !important;}
     footer {visibility: hidden; height: 40px;}
     .footer-text {text-align: center; color: #8b949e; font-size: 0.85em; padding: 20px 0;}
-    
-    .thinking {
-        display: inline-block;
-        font-size: 1.2em;
-        font-weight: bold;
-        color: #58a6ff;
+
+    /* New Chat button - top left */
+    .new-chat-btn {
+        position: fixed;
+        top: 20px;
+        left: 280px;
+        z-index: 9999;
+        background: #30363d;
+        border: 1px solid #404040;
+        border-radius: 12px;
+        padding: 10px 16px;
+        font-size: 14px;
+        font-weight: 500;
+        color: #c9d1d9;
+        cursor: pointer;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
     }
+    .new-chat-btn:hover {
+        background: #404040;
+        border-color: #58a6ff;
+    }
+
+    /* Thinking animation */
+    .thinking {display: inline-block; font-size: 1.2em; font-weight: bold; color: #58a6ff;}
     .dot {animation: blink 1.4s infinite both;}
     .dot:nth-child(1) {animation-delay: 0s;}
     .dot:nth-child(2) {animation-delay: 0.2s;}
     .dot:nth-child(3) {animation-delay: 0.4s;}
     @keyframes blink {0%, 80%, 100% {opacity: 0.3;} 20% {opacity: 1;}}
-    
-    /* NEW CHAT BUTTON - top left */
-    .new-chat-btn {
-        position: fixed;
-        top: 20px;
-        left: 20px;
-        z-index: 9999;
-    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -108,20 +117,16 @@ if st.session_state.mode == "Home":
     st.markdown('<div class="footer-text">Spartan AI • Senior Project • Dallin Geurts • 2025</div>', unsafe_allow_html=True)
     st.stop()
 
-# === NEW CHAT BUTTON (only on tool pages) ===
-if st.session_state.mode != "Home":
-    st.markdown('<div class="new-chat-btn">', unsafe_allow_html=True)
-    if st.button("New Chat", key="new_chat_top"):
-        st.session_state.messages = [{"role":"assistant","content":"Hello! How can I help you today?"}]
-        st.session_state.pending_ocr_text = None
-        st.session_state.uploaded_file_name = None
-        st.rerun()
-    st.markdown('</div>', unsafe_allow_html=True)
-
-# Main tool
+# Main tool view
 current_tool = st.session_state.mode
 model = MODEL_MAP[current_tool]
 st.title(current_tool)
+
+# NEW CHAT BUTTON — appears on every tool
+if st.session_state.messages:  # Only show if there's chat history
+    if st.button("New Chat", key="new_chat_btn"):
+        st.session_state.messages = [{"role":"assistant","content":"Hello! How can I help you today?"}]
+        st.rerun()
 
 # Chat history
 for msg in st.session_state.messages:
@@ -134,7 +139,7 @@ uploaded_file = st.file_uploader(
     type=["pdf","docx","txt","png","jpg","jpeg","gif","bmp","tiff"]
 )
 
-# Extract text
+# Extract text (unchanged)
 if uploaded_file and uploaded_file.name != st.session_state.uploaded_file_name:
     with st.spinner("Extracting text from file..."):
         extracted_text = ""
@@ -177,7 +182,7 @@ if user_input:
     with st.chat_message("user"):
         st.markdown(user_input)
 
-    # AI RESPONSE — Thinking → typing cursor
+    # AI RESPONSE — PERFECT THINKING → TYPING CURSOR
     with st.chat_message("assistant"):
         thinking_placeholder = st.empty()
         thinking_placeholder.markdown(
