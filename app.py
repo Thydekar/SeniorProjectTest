@@ -180,7 +180,7 @@ if user_input:
     # AI RESPONSE WITH THINKING ANIMATION
     with st.chat_message("assistant"):
         thinking = st.empty()
-        thinking.markdown('<div class="thinking">Thinking<span class="dot">.</span><span class="dot">.</span><span class="dot">.</span></div>', unsafe_allow_html=True)
+        thinking.markdown('<div class="thinking">Thinking<span class="dot">.</span><span class="dot">.</span><span class="dot">.</span><span style="animation: blink 1s step-end infinite;">▋</span></div>', unsafe_allow_html=True)
         
         placeholder = st.empty()
         full_response = ""
