@@ -1,4 +1,4 @@
-# app.py — Spartan AI Demo — FINAL & EXACTLY WHAT YOU WANTED
+# app.py — Spartan AI Demo — FINAL & BULLETPROOF (No KeyError, perfect behavior)
 import streamlit as st
 import requests
 from requests.auth import HTTPBasicAuth
@@ -32,7 +32,6 @@ st.markdown("""
     section[data-testid="stSidebar"] {background:#161b22;}
     h1,h2 {color:#58a6ff;}
     
-    /* Fixed bottom bar */
     .bottom-bar {
         position: fixed;
         bottom: 0;
@@ -50,7 +49,6 @@ st.markdown("""
         border-radius: 16px 16px 0 0;
     }
     
-    /* Upload button */
     .upload-btn button {
         background: #30363d !important;
         color: #c9d1d9 !important;
@@ -65,7 +63,6 @@ st.markdown("""
         border-color: #58a6ff !important;
     }
     
-    /* Hide file uploader completely */
     .stFileUploader {display: none !important;}
     
     .footer {
@@ -79,7 +76,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # =============================
-# SESSION STATE
+# SESSION STATE (safe defaults)
 # =============================
 if "messages" not in st.session_state:
     st.session_state.messages = []
@@ -121,7 +118,7 @@ model_map = {
 if mode == "Home":
     st.title("Spartan AI Demo")
     st.markdown("### Empowering Education with Responsible AI")
-    st.markdown("Spartan AI helps teachers and students with ethical AI tools.")
+    st.markdown("Spartan AI helps teachers and students with ethical, powerful tools.")
     st.markdown("<div class='footer'>Spartan AI • Senior Project • Dallin Geurts • 2025</div>", unsafe_allow_html=True)
     st.stop()
 
@@ -129,26 +126,26 @@ current_model = model_map[mode]
 st.title(mode)
 
 # =============================
-# DISPLAY CHAT (no images shown)
+# DISPLAY CHAT (only text, no images)
 # =============================
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
-        st.markdown(msg["display_text"])
+        # Safely get display_text or fall back to content
+        display = msg.get("display_text") or msg.get("content", "")
+        st.markdown(display)
 
 # Bottom padding
 st.markdown("<div style='height: 180px;'></div>", unsafe_allow_html=True)
 
 # =============================
-# BOTTOM BAR — UPLOAD + CHAT INPUT
+# FIXED BOTTOM BAR
 # =============================
 st.markdown("<div class='bottom-bar'>", unsafe_allow_html=True)
 
 # Custom upload button (triggers hidden uploader)
 st.markdown("""
-<label for="hidden-uploader" style="cursor:pointer;">
-    <div class="upload-btn">
-        <button>Upload image</button>
-    </div>
+<label for="hidden-uploader" style="cursor:pointer; margin:0;">
+    <div class="upload-btn"><button>Upload image</button></div>
 </label>
 <input id="hidden-uploader" type="file" accept="image/*" style="display:none;">
 """, unsafe_allow_html=True)
@@ -162,35 +159,36 @@ prompt = st.chat_input("Type your message...")
 st.markdown("</div>", unsafe_allow_html=True)
 
 # =============================
-# PROCESS UPLOADED IMAGE (OCR silently)
+# PROCESS IMAGE UPLOAD
 # =============================
 if uploaded_file is not None:
-    if st.session_state.pending_ocr_text is None or st.session_state.get("last_uploaded") != uploaded_file.name:
+    # Prevent re-processing same file
+    if st.session_state.get("last_uploaded_name") != uploaded_file.name:
         with st.spinner("Processing image..."):
             try:
                 img = Image.open(uploaded_file).convert("RGB")
                 big = img.resize((img.width*3, img.height*3), Image.LANCZOS)
                 ocr_text = pytesseract.image_to_string(big, config=OCR_CONFIG).strip()
                 
-                st.session_state.pending_ocr_text = ocr_text if ocr_text else "(No text found)"
-                st.session_state.last_uploaded = uploaded_file.name
+                st.session_state.pending_ocr_text = ocr_text if ocr_text else "(No readable text)"
+                st.session_state.last_uploaded_name = uploaded_file.name
                 st.success("Image processed")
-            except:
-                st.error("Failed to process image.")
+            except Exception as e:
+                st.error("Failed to read image.")
                 st.session_state.pending_ocr_text = None
 
 # =============================
 # SEND MESSAGE
 # =============================
 if prompt:
-    # Build message content
+    # Build full message content for AI
     user_content = f"user-query{{{prompt}}}"
     
-    if st.session_state.pending_ocr_text:
+    if st.session_state.pending_ocr_text is not None:
         user_content = f"uploaded-image-text{{{st.session_state.pending_ocr_text}}}\n{user_content}"
-        st.session_state.pending_ocr_text = None  # Clear after first use
+        st.session_state.pending_ocr_text = None  # Clear after use
 
-    # Save message
+    # Save message (display only user's text)
     st.session_state.messages.append({
         "role": "user",
         "content": user_content,
@@ -201,35 +199,37 @@ if prompt:
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    # Get AI response
+    # AI response
     with st.chat_message("assistant"):
         placeholder = st.empty()
-        full = ""
+        full_response = ""
         try:
             payload = {
                 "model": current_model,
                 "messages": [{"role": m["role"], "content": m["content"]} for m in st.session_state.messages],
                 "stream": True
             }
-            with requests.post(OLLAMA_CHAT_URL, json=payload,
-                               auth=HTTPBasicAuth(USERNAME, PASSWORD),
-                               timeout=600, verify=False, stream=True) as r:
+            with requests.post(
+                OLLAMA_CHAT_URL, json=payload,
+                auth=HTTPBasicAuth(USERNAME, PASSWORD),
+                timeout=600, verify=False, stream=True
+            ) as r:
                 r.raise_for_status()
                 for line in r.iter_lines():
                     if line:
-                        token = json.loads(line).get("message",{}).get("content","")
-                        full += token
-                        placeholder.markdown(full + "cursor")
+                        token = json.loads(line).get("message", {}).get("content", "")
+                        full_response += token
+                        placeholder.markdown(full_response + "cursor")
                         time.sleep(0.01)
-                placeholder.markdown(full)
+                placeholder.markdown(full_response)
         except:
-            full = "Sorry, I couldn't connect right now."
-            placeholder.markdown(full)
+            full_response = "Sorry, connection failed."
+            placeholder.markdown(full_response)
 
         st.session_state.messages.append({
             "role": "assistant",
-            "content": full,
-            "display_text": full
+            "content": full_response,
+            "display_text": full_response
         })
 
 # =============================
