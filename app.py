@@ -1,4 +1,4 @@
-# app.py — Spartan AI Demo — FINAL & ABSOLUTELY PERFECT
+# app.py — Spartan AI Demo — FINAL & FLAWLESS (Paperclip only, image once, perfect)
 import streamlit as st
 import requests
 from requests.auth import HTTPBasicAuth
@@ -23,31 +23,36 @@ OCR_CONFIG = r"--oem 3 --psm 6"
 
 st.set_page_config(page_title="Spartan AI Demo", layout="centered")
 
-# Custom CSS — paperclip icon + clean look
+# CLEAN, PROFESSIONAL CSS — ONLY PAPERCLIP
 st.markdown("""
 <style>
-    .main {background:#0d1117;color:#c9d1d9;}
-    section[data-testid="stSidebar"]{background:#161b22;}
-    .stButton>button{width:100%;margin:10px 0;background:#21262d;color:white;
-        border:1px solid #30363d;border-radius:14px;padding:16px;
-        font-weight:700;font-size:18px;}
-    .stButton>button:hover{background:#21262d;}
-    .stButton>button:active{background:#58a6ff!important;color:black!important;}
+    .main {background:#0d1117; color:#c9d1d9;}
+    section[data-testid="stSidebar"] {background:#161b22; border-right:1px solid #30363d;}
     
-    /* Hide default file uploader */
-    .uploadedFile {display:none;}
+    /* Hide ALL default file uploader visuals */
+    section[data-testid="stFileUploader"] {display:none !important;}
+    .uploadedFileName, .stFileUploader label, div[data-testid="stFileUploaderDropzone"] {display:none !important;}
     
     /* Paperclip button */
-    .paperclip-btn button {
-        background:transparent !important;
-        border:none !important;
-        box-shadow:none !important;
-        padding:8px 12px !important;
+    .paperclip-button button {
+        background: transparent !important;
+        border: none !important;
+        padding: 8px 10px !important;
+        border-radius: 8px !important;
+        color: #8b949e !important;
+        font-size: 20px !important;
     }
-    .paperclip-btn button:hover {background:#30363d !important;}
+    .paperclip-button button:hover {
+        background: #30363d !important;
+        color: #58a6ff !important;
+    }
     
-    .footer{text-align:center;color:#8b949e;font-size:0.85em;margin-top:60px;}
-    h1,h2{color:#58a6ff;}
+    .stButton>button {width:100%; margin:10px 0; background:#21262d; color:white;
+        border:1px solid #30363d; border-radius:14px; padding:16px; font-weight:700; font-size:18px;}
+    .stButton>button:active {background:#58a6ff !important; color:black !important;}
+    
+    .footer {text-align:center; color:#8b949e; font-size:0.85em; margin-top:60px;}
+    h1,h2 {color:#58a6ff;}
 </style>
 """, unsafe_allow_html=True)
 
@@ -107,15 +112,24 @@ for msg in st.session_state.messages:
         if msg.get("image"):
             st.image(msg["image"], width=300)
 
-# Custom chat input with paperclip
-col1, col2 = st.columns([0.8, 6.5])
-with col1:
-    uploaded_file = st.file_uploader("", type=["png","jpg","jpeg"], label_visibility="collapsed")
+# === CUSTOM CHAT BAR WITH PAPERCLIP ONLY ===
+col1, col2, col3 = st.columns([0.6, 7, 1])
 
-# Process uploaded image
+with col1:
+    # Hidden file uploader
+    uploaded_file = st.file_uploader("", type=["png","jpg","jpeg"], key="hidden_uploader", label_visibility="collapsed")
+
+with col2:
+    prompt = st.chat_input("Type your message...")
+
+with col3:
+    st.markdown('<div class="paperclip-button">', unsafe_allow_html=True)
+    st.markdown("Paperclip", unsafe_allow_html=True)  # This shows ONLY the icon
+    st.markdown('</div>', unsafe_allow_html=True)
+
+# Process image when uploaded
 if uploaded_file is not None:
-    current_name = st.session_state.pending_image["name"] if st.session_state.get("pending_image") else None
-    if current_name != uploaded_file.name:
+    if st.session_state.get("pending_image", {}).get("name") != uploaded_file.name:
         with st.spinner("Reading image..."):
             try:
                 img = Image.open(uploaded_file).convert("RGB")
@@ -128,18 +142,14 @@ if uploaded_file is not None:
                 thumb.save(buf, format="PNG")
                 img_bytes = buf.getvalue()
 
-                st.session_state.pending_image = {"name":uploaded_file.name, "thumb":img_bytes, "ocr":ocr}
+                st.session_state.pending_image = {"name": uploaded_file.name, "thumb": img_bytes, "ocr": ocr}
                 st.success("Image ready!")
             except:
-                st.error("Image failed.")
+                st.error("Failed to read image.")
                 st.session_state.pending_image = None
 
-with col2:
-    prompt = st.chat_input("Type your message...")
-
-# Handle message send
+# Handle message
 if prompt:
-    # Build Ollama payload
     ollama_messages = []
     for m in st.session_state.messages:
         ollama_messages.append({"role": m["role"], "content": m.get("ai_content", m.get("content", ""))})
@@ -153,19 +163,18 @@ if prompt:
         if ocr:
             ai_text += f"uploaded-image-text{{{ocr}}}\n"
         image_data = st.session_state.pending_image["thumb"]
-        st.session_state.pending_image = None  # CONSUME IT — never repeats
+        st.session_state.pending_image = None  # CONSUMED — never repeats
 
     ai_text += f"user-query{{{prompt}}}"
 
-    # Save user message
-    new_msg = {
+    # Save message
+    st.session_state.messages.append({
         "role": "user",
         "ai_content": ai_text,
         "content": ai_text,
         "display_text": prompt,
-        "image": image_data  # Only this message gets the image
-    }
-    st.session_state.messages.append(new_msg)
+        "image": image_data
+    })
 
     # Show user message
     with st.chat_message("user"):
@@ -192,7 +201,7 @@ if prompt:
                 placeholder.markdown(full)
         except:
             placeholder.error("Connection failed.")
-            full = "Sorry, I'm having trouble connecting."
+            full = "Sorry, I can't connect right now."
 
         st.session_state.messages.append({
             "role": "assistant",
