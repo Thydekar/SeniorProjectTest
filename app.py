@@ -6,69 +6,61 @@ import json
 import time
 import pytesseract
 from PIL import Image
-import io
 
-# ─────────────────────────── EDIT THESE ONLY ───────────────────────────
-NGROK_URL = "https://ona-overcritical-extrinsically.ngrok-free.dev"  # ← Your permanent tunnel
+# ──────────────────────── EDIT ONLY THESE ────────────────────────
+NGROK_URL = "https://ona-overcritical-extrinsically.ngrok-free.dev"
 
-# MODEL NAMES — CHANGE THESE WHEN YOU TRAIN NEW MODELS
-MODEL_ASSIGNMENT_GEN   = "spartan-assignment"      # Assignment Generator
-MODEL_GRADER           = "spartan-grader"          # Assignment Grader
-MODEL_PLAGIARISM       = "spartan-detector"        # AI Content / Plagiarism Detector
-MODEL_STUDENT_CHAT     = "spartan-student"         # Student Helper Chatbot
-# ───────────────────────────────────────────────────────────────────────
+MODEL_ASSIGNMENT_GEN = "spartan-assignment"
+MODEL_GRADER         = "spartan-grader"
+MODEL_PLAGIARISM     = "spartan-detector"
+MODEL_STUDENT_CHAT   = "spartan-student"
+# ──────────────────────────────────────────────────────────────────
 
 OLLAMA_CHAT_URL = f"{NGROK_URL}/api/chat"
 USERNAME = "dgeurts"
 PASSWORD = "thaidakar21"
 
-# OCR Setup (for image uploads)
-pytesseract.pytesseract.tesseract_cmd = '/usr/bin/tesseract'  # Kaggle has it installed
+st.set_page_config(page_title="Spartan AI Demo", layout="centered")
 
-st.set_page_config(
-    page_title="Spartan AI Demo",
-    page_icon="Shield",
-    layout="centered",
-    initial_sidebar_state="expanded"
-)
-
-# Professional Dark Theme
+# Clean dark theme
 st.markdown("""
 <style>
     .main {background: #0d1117; color: #c9d1d9;}
     .stApp {background: #0d1117;}
     section[data-testid="stSidebar"] {background: #161b22; border-right: 1px solid #30363d;}
-    .stChatMessage {margin: 12px 0;}
+    .stButton > button {
+        width: 100%; margin: 8px 0; background: #21262d; color: white;
+        border: 1px solid #30363d; border-radius: 12px; padding: 12px;
+        font-weight: 600; font-size: 16px;
+    }
+    .stButton > button:hover {background: #30363d; border-color: #58a6ff;}
+    .stButton > button:active, .stButton > button:focus {background: #238636; border-color: #58a6ff;}
     .stTextInput > div > div > input {background: #21262d; color: white; border: 1px solid #30363d; border-radius: 16px;}
-    .stButton > button {background: #238636; color: white; border-radius: 16px; height: 48px; font-weight: 600;}
-    .ocr-box {background: #1e1e2e; padding: 12px; border-radius: 10px; border: 1px solid #30363d; font-size: 0.9em;}
+    .ocr-box {background: #1e1e2e; padding: 14px; border-radius: 10px; border: 1px solid #30363d; font-size: 0.95em;}
     .footer {text-align: center; color: #8b949e; font-size: 0.85em; margin-top: 60px; padding: 20px;}
-    h1, h2, h3 {color: #58a6ff;}
-    .css-1d391kg {padding-top: 1rem;}
+    h1, h2 {color: #58a6ff;}
 </style>
 """, unsafe_allow_html=True)
 
-# ────────────────────────── SIDEBAR & NAVIGATION ──────────────────────────
+# ────────────────────────── SIDEBAR WITH BUTTONS ──────────────────────────
 with st.sidebar:
-    st.image("https://img.icons8.com/fluency/100/shield.png", width=80)
     st.title("Spartan AI Demo")
-    st.markdown("**Select AI Assistant**")
+    st.markdown("**Select Assistant**")
 
-    mode = st.radio(
-        "Choose Tool",
-        [
-            "Assignment Generation",
-            "Assignment Grader",
-            "AI Content/Plagiarism Detector",
-            "Student Chatbot"
-        ],
-        label_visibility="collapsed"
-    )
+    if st.button("Assignment Generation"):
+        st.session_state.mode = "Assignment Generation"
+    if st.button("Assignment Grader"):
+        st.session_state.mode = "Assignment Grader"
+    if st.button("AI Content/Plagiarism Detector"):
+        st.session_state.mode = "AI Content/Plagiarism Detector"
+    if st.button("Student Chatbot"):
+        st.session_state.mode = "Student Chatbot"
 
     st.markdown("---")
     st.caption("Senior Project by Dallin Geurts")
 
-# Map mode to model
+mode = st.session_state.get("mode", "Assignment Generation")
+
 model_map = {
     "Assignment Generation": MODEL_ASSIGNMENT_GEN,
     "Assignment Grader": MODEL_GRADER,
@@ -85,27 +77,26 @@ if len(st.session_state.get("messages", [])) == 0 and not st.session_state.get("
     st.markdown("""
     **Spartan AI** is a senior project developed by **Dallin Geurts** to enhance teaching and learning through carefully designed artificial intelligence tools.
 
-    This suite of assistants helps teachers streamline workflow — generating high-quality assignments, providing fair and consistent grading, and detecting AI-generated content — while giving students a safe, ethical chatbot that encourages learning rather than shortcutting it.
+    This suite helps teachers streamline their workflow — generating high-quality assignments, providing consistent grading, and detecting AI-generated content — while giving students access to a safe, ethical chatbot that supports understanding without enabling academic dishonesty.
 
-    Unlike general-purpose AI tools that can be misused to complete homework or write essays, Spartan AI is built from the ground up with **educational integrity** in mind. It assists without replacing thought, effort, or growth.
+    Unlike general AI tools that can be used to complete assignments, Spartan AI is built with **educational integrity** at its core: it assists, explains, and guides — but never does the work for you.
 
-    All models are fine-tuned and moderated to support academic honesty and meaningful learning.
+    All models are fine-tuned to promote honesty, effort, and real learning.
     """)
 
-    st.markdown("### Available Tools")
+    st.markdown("### Tools")
     st.markdown("""
-    - **Assignment Generation** – Create original, leveled assignments instantly  
-    - **Assignment Grader** – Grade submissions with detailed, fair feedback  
-    - **AI Content/Plagiarism Detector** – Identify AI-written text in student work  
-    - **Student Chatbot** – Help students understand concepts (won’t write essays for them)
+    • Assignment Generation  
+    • Assignment Grader  
+    • AI Content/Plagiarism Detector  
+    • Student Chatbot (safe & helpful)
     """)
 
-    if st.button("Begin Using Spartan AI", type="primary", use_container_width=True):
+    if st.button("Start Using Spartan AI", type="primary", use_container_width=True):
         st.session_state.started = True
         st.session_state.messages = [{"role": "assistant", "content": "Hello! How can I help you today?"}]
         st.rerun()
 
-    st.markdown("---")
     st.markdown("<div class='footer'>Spartan AI • Senior Project • Dallin Geurts • 2025</div>", unsafe_allow_html=True)
     st.stop()
 
@@ -113,44 +104,39 @@ if len(st.session_state.get("messages", [])) == 0 and not st.session_state.get("
 st.title(f"{mode}")
 
 # Image Upload + OCR
-uploaded_file = st.file_uploader("Upload an image (handwriting, screenshot, etc.)", type=["png", "jpg", "jpeg"])
+uploaded_file = st.file_uploader("Upload image (handwriting, screenshot, etc.)", type=["png", "jpg", "jpeg"])
 ocr_text = ""
 
-if uploaded_file is not None:
+if uploaded_file:
     image = Image.open(uploaded_file)
-    st.image(image, caption="Uploaded Image", width=400)
-    with st.spinner("Reading text from image..."):
-        try:
-            ocr_text = pytesseract.image_to_string(image)
-            st.success("Text extracted from image!")
-            st.markdown(f"<div class='ocr-box'><strong>OCR Result:</strong><br>{ocr_text}</div>", unsafe_allow_html=True)
-        except:
-            st.error("OCR failed. Try a clearer image.")
+    st.image(image, width=400)
+    with st.spinner("Extracting text..."):
+        ocr_text = pytesseract.image_to_string(image)
+        st.markdown(f"<div class='ocr-box'><strong>Text from image:</strong><br><pre>{ocr_text.strip()}</pre></div>", unsafe_allow_html=True)
 
-# Initialize chat
+# Chat history
 if "messages" not in st.session_state:
     st.session_state.messages = [{"role": "assistant", "content": "Hello! How can I help you today?"}]
 
-# Display history
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
 # Input
-prompt = st.chat_input("Type your message or ask about the uploaded image...")
+prompt = st.chat_input("Ask a question...")
 
-if prompt or (uploaded_file and ocr_text):
-    user_message = prompt or ""
+if prompt or ocr_text:
+    user_msg = prompt or ""
     if ocr_text:
-        user_message = f"[IMAGE UPLOADED]\n\nText from image:\n\"\"\"\n{ocr_text.strip()}\n\"\"\"\n\n{user_message}".strip()
+        user_msg = f"Image uploaded — text content:\n\"\"\"\n{ocr_text.strip()}\n\"\"\"\n\n{user_msg}".strip()
 
-    st.session_state.messages.append({"role": "user", "content": user_message})
+    st.session_state.messages.append({"role": "user", "content": user_msg})
     with st.chat_message("user"):
-        st.markdown(user_message)
+        st.markdown(user_msg)
 
     with st.chat_message("assistant"):
         placeholder = st.empty()
-        full_response = ""
+        full = ""
 
         try:
             payload = {
@@ -171,21 +157,18 @@ if prompt or (uploaded_file and ocr_text):
                 for line in r.iter_lines():
                     if line:
                         try:
-                            chunk = json.loads(line.decode())
+                            chunk = json.loads(line)
                             token = chunk.get("message", {}).get("content", "")
-                            full_response += token
-                            placeholder.markdown(full_response + "▎")
-                            time.sleep(0.008)
+                            full += token
+                            placeholder.markdown(full + "▎")
+                            time.sleep(0.01)
                         except:
                             continue
-                placeholder.markdown(full_response)
+                placeholder.markdown(full)
 
-        except Exception as e:
-            error_msg = "I'm having trouble connecting right now. Please try again in a moment."
-            placeholder.error(error_msg)
-            full_response = error_msg
+        except Exception:
+            placeholder.error("I'm having trouble connecting right now. Please try again soon.")
 
-        st.session_state.messages.append({"role": "assistant", "content": full_response})
+        st.session_state.messages.append({"role": "assistant", "content": full})
 
-# Footer
-st.markdown("<div class='footer'>Spartan AI • Senior Project by Dallin Geurts • Built for Education</div>", unsafe_allow_html=True)
+ st.markdown("<div class='footer'>Spartan AI • Senior Project • Dallin Geurts</div>", unsafe_allow_html=True)
