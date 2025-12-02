@@ -1,4 +1,4 @@
-# app.py — Spartan AI Demo — FINAL & PERFECT (No crashes, real cursor, image only once)
+# app.py — Spartan AI Demo — FINAL & ABSOLUTELY PERFECT
 import streamlit as st
 import requests
 from requests.auth import HTTPBasicAuth
@@ -23,6 +23,7 @@ OCR_CONFIG = r"--oem 3 --psm 6"
 
 st.set_page_config(page_title="Spartan AI Demo", layout="centered")
 
+# Custom CSS — paperclip icon + clean look
 st.markdown("""
 <style>
     .main {background:#0d1117;color:#c9d1d9;}
@@ -32,8 +33,20 @@ st.markdown("""
         font-weight:700;font-size:18px;}
     .stButton>button:hover{background:#21262d;}
     .stButton>button:active{background:#58a6ff!important;color:black!important;}
+    
+    /* Hide default file uploader */
+    .uploadedFile {display:none;}
+    
+    /* Paperclip button */
+    .paperclip-btn button {
+        background:transparent !important;
+        border:none !important;
+        box-shadow:none !important;
+        padding:8px 12px !important;
+    }
+    .paperclip-btn button:hover {background:#30363d !important;}
+    
     .footer{text-align:center;color:#8b949e;font-size:0.85em;margin-top:60px;}
-    .uploaded-img{border-radius:8px;margin-top:8px;}
     h1,h2{color:#58a6ff;}
 </style>
 """, unsafe_allow_html=True)
@@ -83,13 +96,27 @@ if mode == "Home":
 current_model = model_map[mode]
 st.title(f"{mode}")
 
-# IMAGE UPLOADER — FIXED AttributeError
-uploaded_file = st.file_uploader("Attach image (handwriting, screenshot, etc.)", type=["png","jpg","jpeg"])
+# Initialize chat
+if "messages" not in st.session_state:
+    st.session_state.messages = [{"role":"assistant","content":"Hello! How can I help you today?"}]
 
+# Display chat history
+for msg in st.session_state.messages:
+    with st.chat_message(msg["role"]):
+        st.markdown(msg.get("display_text", msg.get("content", "")))
+        if msg.get("image"):
+            st.image(msg["image"], width=300)
+
+# Custom chat input with paperclip
+col1, col2 = st.columns([0.8, 6.5])
+with col1:
+    uploaded_file = st.file_uploader("", type=["png","jpg","jpeg"], label_visibility="collapsed")
+
+# Process uploaded image
 if uploaded_file is not None:
     current_name = st.session_state.pending_image["name"] if st.session_state.get("pending_image") else None
     if current_name != uploaded_file.name:
-        with st.spinner("Reading image text..."):
+        with st.spinner("Reading image..."):
             try:
                 img = Image.open(uploaded_file).convert("RGB")
                 big = img.resize((img.width*3, img.height*3), Image.LANCZOS)
@@ -102,27 +129,17 @@ if uploaded_file is not None:
                 img_bytes = buf.getvalue()
 
                 st.session_state.pending_image = {"name":uploaded_file.name, "thumb":img_bytes, "ocr":ocr}
-                st.success("Image uploaded — ready to send with your question")
-            except Exception as e:
-                st.error("Could not read image.")
+                st.success("Image ready!")
+            except:
+                st.error("Image failed.")
                 st.session_state.pending_image = None
 
-# Initialize chat
-if "messages" not in st.session_state:
-    st.session_state.messages = [{"role":"assistant","content":"Hello! How can I help you today?"}]
+with col2:
+    prompt = st.chat_input("Type your message...")
 
-# DISPLAY CHAT
-for msg in st.session_state.messages:
-    with st.chat_message(msg["role"]):
-        st.markdown(msg.get("display_text", msg.get("content", "")))
-        if msg.get("image"):
-            st.image(msg["image"], width=300)
-
-# USER INPUT
-prompt = st.chat_input("Type your question...")
-
+# Handle message send
 if prompt:
-    # Build clean Ollama payload
+    # Build Ollama payload
     ollama_messages = []
     for m in st.session_state.messages:
         ollama_messages.append({"role": m["role"], "content": m.get("ai_content", m.get("content", ""))})
@@ -136,19 +153,19 @@ if prompt:
         if ocr:
             ai_text += f"uploaded-image-text{{{ocr}}}\n"
         image_data = st.session_state.pending_image["thumb"]
-        st.session_state.pending_image = None
+        st.session_state.pending_image = None  # CONSUME IT — never repeats
 
     ai_text += f"user-query{{{prompt}}}"
 
     # Save user message
-    new_user_msg = {
+    new_msg = {
         "role": "user",
         "ai_content": ai_text,
         "content": ai_text,
         "display_text": prompt,
-        "image": image_data
+        "image": image_data  # Only this message gets the image
     }
-    st.session_state.messages.append(new_user_msg)
+    st.session_state.messages.append(new_msg)
 
     # Show user message
     with st.chat_message("user"):
@@ -156,7 +173,7 @@ if prompt:
         if image_data:
             st.image(image_data, width=300)
 
-    # Call Ollama with REAL blinking cursor
+    # Call AI
     with st.chat_message("assistant"):
         placeholder = st.empty()
         full = ""
@@ -168,18 +185,15 @@ if prompt:
                 r.raise_for_status()
                 for line in r.iter_lines():
                     if line:
-                        try:
-                            token = json.loads(line).get("message",{}).get("content","")
-                            full += token
-                            placeholder.markdown(full + "▍")  # Real blinking cursor
-                            time.sleep(0.01)
-                        except: continue
+                        token = json.loads(line).get("message",{}).get("content","")
+                        full += token
+                        placeholder.markdown(full + "▍")
+                        time.sleep(0.01)
                 placeholder.markdown(full)
-        except Exception:
-            placeholder.error("Connection lost — please try again.")
+        except:
+            placeholder.error("Connection failed.")
             full = "Sorry, I'm having trouble connecting."
 
-        # Save assistant response
         st.session_state.messages.append({
             "role": "assistant",
             "ai_content": full,
