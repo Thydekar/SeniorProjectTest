@@ -1,4 +1,4 @@
-# app.py — Spartan AI Demo — FINAL & BULLETPROOF (OCR works perfectly)
+# app.py — Spartan AI Demo — FINAL FIXED VERSION
 import streamlit as st
 import requests
 from requests.auth import HTTPBasicAuth
@@ -8,39 +8,34 @@ import pytesseract
 from PIL import Image
 import io
 
-# ──────────────────────── EDIT ONLY THESE ────────────────────────
+# EDIT ONLY THESE
 NGROK_URL = "https://ona-overcritical-extrinsically.ngrok-free.dev"
 
-MODEL_ASSIGNMENT_GEN = "gemma3"
+MODEL_ASSIGNMENT_GEN = "spartan-assignment"
 MODEL_GRADER         = "spartan-grader"
 MODEL_PLAGIARISM     = "spartan-detector"
 MODEL_STUDENT_CHAT   = "spartan-student"
-# ──────────────────────────────────────────────────────────────────
 
 OLLAMA_CHAT_URL = f"{NGROK_URL}/api/chat"
 USERNAME = "dgeurts"
 PASSWORD = "thaidakar21"
 
-# FIXED: No quotes inside config string → no shlex crash
-OCR_CONFIG = r"--oem 3 --psm 6 -c tessedit_char_whitelist=ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789.,!?;:\()[]{}<>-_+=*/\&%$#@!~^|"
+OCR_CONFIG = r"--oem 3 --psm 6"
 
 st.set_page_config(page_title="Spartan AI Demo", layout="centered")
 
 st.markdown("""
 <style>
-    .main {background: #0d1117; color: #c9d1d9;}
-    section[data-testid="stSidebar"] {background: #161b22; border-right: 1px solid #30363d;}
-    .stButton > button {
-        width: 100%; margin: 10px 0; background: #21262d; color: white;
-        border: 1px solid #30363d; border-radius: 14px; padding: 16px;
-        font-weight: 700; font-size:18px;
-    }
-    .stButton > button:hover {background:#21262d;}
-    .stButton > button:active {background:#58a6ff !important; color:black !important;}
-    .stTextInput > div > div > input {background:#21262d; color:white; border:1px solid #30363d; border-radius:16px;}
-    .footer {text-align:center; color:#8b949e; font-size:0.85em; margin-top:60px; padding:20px;}
+    .main {background:#0d1117; color:#c9d1d9;}
+    section[data-testid="stSidebar"] {background:#161b22;}
+    .stButton>button {width:100%; margin:10px 0; background:#21262d; color:white;
+        border:1px solid #30363d; border-radius:14px; padding:16px;
+        font-weight:700; font-size:18px;}
+    .stButton>button:hover {background:#21262d;}
+    .stButton>button:active {background:#58a6ff !important; color:black !important;}
+    .footer {text-align:center; color:#8b949e; font-size:0.85em; margin-top:60px;}
     .uploaded-img {border-radius:8px; margin-top:8px;}
-    h1, h2 {color:#58a6ff;}
+    h1,h2 {color:#58a6ff;}
 </style>
 """, unsafe_allow_html=True)
 
@@ -48,26 +43,20 @@ st.markdown("""
 with st.sidebar:
     st.title("Spartan AI Demo")
     if st.button("Home", key="home"):
-        st.session_state.mode = "Home"
-        st.session_state.messages = []
-        st.session_state.pending_image = None
+        for key in ["mode", "messages", "pending_image", "last_mode"]:
+            st.session_state.pop(key, None)
         st.rerun()
 
     st.markdown("**Tools**")
-    for label, key in [
-        ("Assignment Generation", "a"),
-        ("Assignment Grader", "g"),
-        ("AI Content/Plagiarism Detector", "d"),
-        ("Student Chatbot", "s")
-    ]:
+    for label, key in [("Assignment Generation","a"), ("Assignment Grader","g"),
+                       ("AI Content/Plagiarism Detector","d"), ("Student Chatbot","s")]:
         if st.button(label, key=key):
             st.session_state.mode = label
-            if "messages" not in st.session_state or st.session_state.get("last_mode") != label:
-                st.session_state.messages = [{"role": "assistant", "content": "Hello! How can I help you today?"}]
+            if st.session_state.get("last_mode") != label:
+                st.session_state.messages = [{"role":"assistant","content":"Hello! How can I help you today?"}]
                 st.session_state.last_mode = label
-                st.session_state.pending_image = None
+            st.session_state.pending_image = None
             st.rerun()
-
     st.markdown("---")
     st.caption("Senior Project by Dallin Geurts")
 
@@ -92,7 +81,7 @@ if mode == "Home":
     All models are fine-tuned to promote honesty, effort, and real learning.
     """)
     st.markdown("### Available Tools")
-    st.markdown("• Assignment Generation  \n• Assignment Grader  n• AI Content/Plagiarism Detector  n• Student Chatbot (safe & helpful)")
+    st.markdown("• Assignment Generation\n• Assignment Grader\n• AI Content/Plagiarism Detector\n• Student Chatbot (safe & helpful)")
     st.markdown("<div class='footer'>Spartan AI • Senior Project • Dallin Geurts • 2025</div>", unsafe_allow_html=True)
     st.stop()
 
@@ -100,105 +89,106 @@ if mode == "Home":
 current_model = model_map[mode]
 st.title(f"{mode}")
 
-# Top file uploader
-uploaded_file = st.file_uploader("Attach image (handwriting, screenshot, etc.)", type=["png", "jpg", "jpeg"])
+# File uploader
+uploaded_file = st.file_uploader("Attach image (handwriting, screenshot, etc.)", type=["png","jpg","jpeg"])
 
-# Process image when uploaded (no preview yet)
-if uploaded_file and (st.session_state.get("pending_image") is None or st.session_state.pending_image["name"] != uploaded_file.name):
-    with st.spinner("Reading image text (optimized OCR)..."):
+# Process image when uploaded
+if uploaded_file and (st.session_state.get("pending_image") is None or 
+                     st.session_state.pending_image["name"] != uploaded_file.name):
+    with st.spinner("Reading image text..."):
         try:
-            image = Image.open(uploaded_file).convert("RGB")
-            # 3× upscale + best settings = maximum accuracy
-            big = image.resize((image.width * 3, image.height * 3), Image.LANCZOS)
-            ocr_text = pytesseract.image_to_string(big, config=OCR_CONFIG)
+            img = Image.open(uploaded_file).convert("RGB")
+            big = img.resize((img.width*3, img.height*3), Image.LANCZOS)
+            ocr = pytesseract.image_to_string(big, config=OCR_CONFIG).strip()
 
-            # Create small thumbnail for chat
-            thumb = image.copy()
-            thumb.thumbnail((300, 300))
+            thumb = img.copy()
+            thumb.thumbnail((300,300))
             buf = io.BytesIO()
             thumb.save(buf, format="PNG")
             img_bytes = buf.getvalue()
 
             st.session_state.pending_image = {
                 "name": uploaded_file.name,
-                "data": img_bytes,
-                "text": ocr_text.strip()
+                "thumb": img_bytes,
+                "ocr": ocr
             }
             st.success("Image uploaded — ready to send with your question")
-        except Exception as e:
-            st.error("OCR failed. Try a clearer image.")
+        except:
+            st.error("Could not read image. Try a clearer one.")
             st.session_state.pending_image = None
 
-# Chat history
+# Initialize chat
 if "messages" not in st.session_state:
-    st.session_state.messages = [{"role": "assistant", "content": "Hello! How can I help you today?"}]
+    st.session_state.messages = [{"role":"assistant","content":"Hello! How can I help you today?"}]
 
+# DISPLAY CHAT — we now store display info separately from internal payload
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
-        st.markdown(msg["content"])
+        # User messages may have an image attached
+        if msg["role"] == "user" and msg.get("display_image"):
+            st.markdown(msg["display_text"])
+            st.image(msg["display_image"], width=300)
+        else:
+            st.markdown(msg.get("display_text", msg["content"]))
 
 # User input
 prompt = st.chat_input("Type your question...")
 
 if prompt:
-    internal_msg = ""
-    show_image_in_chat = False
-    image_data = None
+    # Build internal payload for AI
+    internal_content = ""
+    display_text = prompt
+    display_image = None
 
-    # Use pending image if exists
     if st.session_state.get("pending_image"):
-        ocr = st.session_state.pending_image["text"]
+        ocr = st.session_state.pending_image["ocr"]
         if ocr:
-            internal_msg += f"uploaded-image-text{{{ocr}}}"
-        show_image_in_chat = True
-        image_data = st.session_state.pending_image["data"]
+            internal_content += f"uploaded-image-text{{{ocr}}}\n"
+        display_image = st.session_state.pending_image["thumb"]
         st.session_state.pending_image = None  # clear after use
 
-    # Add user query
-    internal_msg += f"\nuser-query{{{prompt}}}"
+    internal_content += f"user-query{{{prompt}}}"
 
-    # Show user message (with image if uploaded)
+    # Save message with display info (user sees clean version + image only once)
+    user_msg = {
+        "role": "user",
+        "content": internal_content,           # what AI sees
+        "display_text": prompt,                # what user sees
+    }
+    if display_image:
+        user_msg["display_image"] = display_image
+
+    st.session_state.messages.append(user_msg)
+
+    # Show user message immediately
     with st.chat_message("user"):
         st.markdown(prompt)
-        if show_image_in_chat:
-            st.image(image_data, width=300)
+        if display_image:
+            st.image(display_image, width=300)
 
-    # Send to AI
-    st.session_state.messages.append({"role": "user", "content": internal_msg})
-
+    # Get AI response
     with st.chat_message("assistant"):
         placeholder = st.empty()
         full = ""
-
         try:
-            payload = {
-                "model": current_model,
-                "messages": st.session_state.messages,
-                "stream": True
-            }
-            with requests.post(
-                OLLAMA_CHAT_URL,
-                json=payload,
-                auth=HTTPBasicAuth(USERNAME, PASSWORD),
-                timeout=600,
-                verify=False,
-                stream=True
-            ) as r:
+            payload = {"model": current_model, "messages": st.session_state.messages, "stream": True}
+            with requests.post(OLLAMA_CHAT_URL, json=payload,
+                               auth=HTTPBasicAuth(USERNAME, PASSWORD),
+                               timeout=600, verify=False, stream=True) as r:
                 r.raise_for_status()
                 for line in r.iter_lines():
                     if line:
                         try:
-                            token = json.loads(line).get("message", {}).get("content", "")
+                            token = json.loads(line).get("message",{}).get("content","")
                             full += token
                             placeholder.markdown(full + "▎")
                             time.sleep(0.008)
-                        except:
-                            continue
+                        except: continue
                 placeholder.markdown(full)
-        except Exception:
-            placeholder.error("Connection lost — please try again.")
+        except:
+            placeholder.error("Connection lost — try again.")
 
-        st.session_state.messages.append({"role": "assistant", "content": full})
+        st.session_state.messages.append({"role":"assistant", "content":full, "display_text":full})
 
 # Footer
 st.markdown("<div class='footer'>Spartan AI • Senior Project • Dallin Geurts</div>", unsafe_allow_html=True)
