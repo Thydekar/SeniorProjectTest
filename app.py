@@ -1,4 +1,4 @@
-# app.py - Spartan AI Demo - FINAL with "New Chat" button + perfect cursor
+# app.py - Spartan AI Demo - FINAL with "New Chat" button + blinking cursor
 import streamlit as st
 import requests
 from requests.auth import HTTPBasicAuth
@@ -52,21 +52,18 @@ st.markdown("""
     .new-chat-btn {
         position: fixed;
         top: 20px;
-        left: 280px;
+        left: 20px;
         z-index: 9999;
-        background: #30363d;
-        border: 1px solid #404040;
-        border-radius: 12px;
-        padding: 10px 16px;
-        font-size: 14px;
-        font-weight: 500;
-        color: #c9d1d9;
-        cursor: pointer;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        background: #238636 !important;
+        color: white !important;
+        border: none !important;
+        border-radius: 8px !important;
+        padding: 10px 16px !important;
+        font-weight: 600 !important;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.4);
     }
     .new-chat-btn:hover {
-        background: #404040;
-        border-color: #58a6ff;
+        background: #2ea043 !important;
     }
 
     /* Thinking animation */
@@ -75,7 +72,7 @@ st.markdown("""
     .dot:nth-child(1) {animation-delay: 0s;}
     .dot:nth-child(2) {animation-delay: 0.2s;}
     .dot:nth-child(3) {animation-delay: 0.4s;}
-    @keyframes blink {0%, 80%, 100% {opacity: 0.3;} 20% {opacity: 1;}}
+    @keyframes blink {0%, 80%, 100% {opacity: 0.3;} 20% {opacity: 1;}
 </style>
 """, unsafe_allow_html=True)
 
@@ -85,6 +82,14 @@ if "messages" not in st.session_state: st.session_state.messages = []
 if "pending_ocr_text" not in st.session_state: st.session_state.pending_ocr_text = None
 if "uploaded_file_name" not in st.session_state: st.session_state.uploaded_file_name = None
 
+# === NEW CHAT BUTTON (appears on every tool page) ===
+if st.session_state.mode != "Home":
+    if st.button("New Chat", key="new_chat_btn", help="Start a fresh conversation"):
+        st.session_state.messages = [{"role": "assistant", "content": "Hello! How can I help you today?"}]
+        st.session_state.pending_ocr_text = None
+        st.session_state.uploaded_file_name = None
+        st.rerun()
+
 # Sidebar
 with st.sidebar:
     st.title("Spartan AI Demo")
@@ -92,12 +97,14 @@ with st.sidebar:
         st.session_state.mode = "Home"
         st.session_state.messages = []
         st.session_state.pending_ocr_text = None
+        st.rerun()
     st.markdown("**Tools**")
     for tool in MODEL_MAP.keys():
         if st.button(tool):
             st.session_state.mode = tool
             st.session_state.messages = [{"role":"assistant","content":"Hello! How can I help you today?"}]
             st.session_state.pending_ocr_text = None
+            st.rerun()
     st.markdown("---")
     st.caption("Senior Project by Dallin Geurts")
 
@@ -117,16 +124,10 @@ if st.session_state.mode == "Home":
     st.markdown('<div class="footer-text">Spartan AI • Senior Project • Dallin Geurts • 2025</div>', unsafe_allow_html=True)
     st.stop()
 
-# Main tool view
+# Main tool page
 current_tool = st.session_state.mode
 model = MODEL_MAP[current_tool]
 st.title(current_tool)
-
-# NEW CHAT BUTTON — appears on every tool
-if st.session_state.messages:  # Only show if there's chat history
-    if st.button("New Chat", key="new_chat_btn"):
-        st.session_state.messages = [{"role":"assistant","content":"Hello! How can I help you today?"}]
-        st.rerun()
 
 # Chat history
 for msg in st.session_state.messages:
@@ -139,7 +140,7 @@ uploaded_file = st.file_uploader(
     type=["pdf","docx","txt","png","jpg","jpeg","gif","bmp","tiff"]
 )
 
-# Extract text (unchanged)
+# Extract text
 if uploaded_file and uploaded_file.name != st.session_state.uploaded_file_name:
     with st.spinner("Extracting text from file..."):
         extracted_text = ""
@@ -182,7 +183,7 @@ if user_input:
     with st.chat_message("user"):
         st.markdown(user_input)
 
-    # AI RESPONSE — PERFECT THINKING → TYPING CURSOR
+    # AI RESPONSE — PERFECT: Thinking → disappears → typing with blinking cursor
     with st.chat_message("assistant"):
         thinking_placeholder = st.empty()
         thinking_placeholder.markdown(
@@ -213,7 +214,7 @@ if user_input:
                         if first_token:
                             thinking_placeholder.empty()
                             first_token = False
-                        response_placeholder.markdown(full_response + "cursor", unsafe_allow_html=True)
+                        response_placeholder.markdown(full_response + "▋", unsafe_allow_html=True)
                         time.sleep(0.01)
                 response_placeholder.markdown(full_response)
                 thinking_placeholder.empty()
