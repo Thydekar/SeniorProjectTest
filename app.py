@@ -23,7 +23,7 @@ except ImportError:
 # Config
 NGROK_URL = "https://ona-overcritical-extrinsically.ngrok-free.dev"
 MODEL_MAP = {
-    "Assignment Generation": "phi3:mini",
+    "Assignment Generation": "spartan-generator",
     "Assignment Grader": "spartan-grader",
     "AI Content/Plagiarism Detector": "spartan-detector",
     "Student Chatbot": "spartan-student",
