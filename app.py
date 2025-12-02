@@ -6,10 +6,12 @@ import time
 import pytesseract
 from PIL import Image
 import io
-import base64
 
-# EDIT ONLY THESE
+# =============================
+# CONFIG — ONLY CHANGE THESE
+# =============================
 NGROK_URL = "https://ona-overcritical-extrinsically.ngrok-free.dev"
+
 MODEL_ASSIGNMENT_GEN = "gemma3"
 MODEL_GRADER         = "spartan-grader"
 MODEL_PLAGIARISM     = "spartan-detector"
@@ -22,75 +24,110 @@ OCR_CONFIG = r"--oem 3 --psm 6"
 
 st.set_page_config(page_title="Spartan AI Demo", layout="centered")
 
-# ===========================
-# CSS – clean UI + fixed chat bar
-# ===========================
+
+# =============================
+# MODERN DARK THEME + FIXED BAR
+# =============================
 st.markdown("""
 <style>
-    .main {background:#0d1117; color:#c9d1d9; padding-bottom:130px;}
+    body {background:#0d1117;}
+    .main {background:#0d1117; color:#c9d1d9;}
     section[data-testid="stSidebar"] {background:#161b22;}
+    h1,h2 {color:#58a6ff;}
 
-    h1, h2 {color:#58a6ff;}
+    /* FIXED bottom chat container */
+    .chat-container {
+        position: fixed;
+        bottom: 0;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 90%;
+        max-width: 800px;
+        background: #0d1117;
+        border-top: 1px solid #30363d;
+        padding: 14px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        z-index: 99999;
+    }
 
-    /* Upload button */
+    /* Custom image upload button */
     .upload-btn {
-        background:#238636;
-        color:white;
-        border:none;
-        padding:10px 18px;
-        border-radius:12px;
-        font-size:14px;
-        font-weight:600;
-        cursor:pointer;
+        background: #238636;
+        border: none;
+        color: white;
+        font-size: 22px;
+        padding: 8px 14px;
+        border-radius: 10px;
+        cursor: pointer;
+        height: 42px;
     }
-    .upload-btn:hover {
-        background:#2ea043;
+    .upload-btn:hover {background:#2ea043;}
+
+    /* Hide Streamlit file uploader input */
+    .invisible-file-uploader > div > div {
+        opacity: 0 !important;
+        height: 0px !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        overflow: hidden !important;
     }
 
-    /* Fixed bottom chat bar */
-    .chatbar-container {
-        position:fixed;
-        bottom:0;
-        left:0;
-        right:0;
-        background:#0d1117;
-        padding:14px 20px;
-        border-top:1px solid #30363d;
-        z-index:999;
+    .footer {
+        text-align:center; 
+        color:#8b949e;
+        font-size:0.85em; 
+        margin-top:60px; 
+        padding-bottom:160px;
     }
 </style>
 """, unsafe_allow_html=True)
 
-# ===========================
+
+# =============================
+# STATE
+# =============================
+if "messages" not in st.session_state:
+    st.session_state.messages = [{"role":"assistant","content":"Hello! How can I help you today?"}]
+
+if "pending_image" not in st.session_state:
+    st.session_state.pending_image = None
+
+
+# =============================
 # SIDEBAR
-# ===========================
+# =============================
 with st.sidebar:
     st.title("Spartan AI Demo")
 
     if st.button("Home", key="home"):
-        for k in ["mode", "messages", "pending_image", "last_mode"]:
+        for k in ["mode","messages","pending_image"]:
             st.session_state.pop(k, None)
         st.rerun()
 
     st.markdown("**Tools**")
-    for label,key in [("Assignment Generation","a"),("Assignment Grader","g"),
-                      ("AI Content/Plagiarism Detector","d"),("Student Chatbot","s")]:
-        if st.button(label, key=key):
+    for label,key in [
+        ("Assignment Generation","a"),
+        ("Assignment Grader","g"),
+        ("AI Content/Plagiarism Detector","d"),
+        ("Student Chatbot","s")
+    ]:
+        if st.button(label,key=key):
             st.session_state.mode = label
-            if st.session_state.get("last_mode") != label:
-                st.session_state.messages = [{"role":"assistant","content":"Hello! How can I help you today?"}]
-                st.session_state.last_mode = label
+            st.session_state.messages = [
+                {"role":"assistant","content":"Hello! How can I help you today?"}
+            ]
             st.session_state.pending_image = None
             st.rerun()
-
     st.markdown("---")
-    st.caption("Senior Project by Dallin Geurts")
+    st.caption("Senior Project • Dallin Geurts")
 
-# ===========================
-# HOME PAGE
-# ===========================
-mode = st.session_state.get("mode", "Home")
 
+# =============================
+# MODE HANDLING
+# =============================
+mode = st.session_state.get("mode","Home")
 model_map = {
     "Assignment Generation": MODEL_ASSIGNMENT_GEN,
     "Assignment Grader": MODEL_GRADER,
@@ -100,151 +137,121 @@ model_map = {
 
 if mode == "Home":
     st.title("Spartan AI Demo")
-    st.markdown("""
-    ### Empowering Education with Responsible AI
-
-    **Spartan AI** is a senior project by **Dallin Geurts** designed to enhance teaching and learning through responsible, fine-tuned AI tools.
-    """)
-    st.markdown("### Available Tools")
-    st.markdown("• Assignment Generation\n• Assignment Grader\n• AI Content/Plagiarism Detector\n• Student Chatbot (safe & helpful)")
+    st.markdown("### Empowering Education with Responsible AI")
+    st.markdown("A modern AI assistant for schools.")
     st.markdown("<div class='footer'>Spartan AI • Senior Project • 2025</div>", unsafe_allow_html=True)
     st.stop()
 
 current_model = model_map[mode]
 st.title(mode)
 
-# ===========================
-# Load chat history
-# ===========================
-if "messages" not in st.session_state:
-    st.session_state.messages = [{"role":"assistant","content":"Hello! How can I help you today?"}]
 
-# ===========================
-# Render chat messages
-# ===========================
+# =============================
+# CHAT LOG DISPLAY
+# =============================
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
-        st.markdown(msg.get("display_text", msg["content"]))
+        st.markdown(msg.get("display_text", msg.get("content", "")))
         if msg.get("image"):
             st.image(msg["image"], width=300)
 
-# ===========================
-# Hidden real native file input (HTML)
-# ===========================
-file_input_id = "real_file_input"
 
-st.markdown(
-    f"""
-    <input type="file" id="{file_input_id}" accept="image/*" style="display:none">
-    <script>
-    function triggerFileUpload() {{
-        document.getElementById('{file_input_id}').click();
-    }}
-    </script>
-    """,
-    unsafe_allow_html=True
+# Spacer so chat doesn't overlap fixed bar
+st.markdown("<div style='height:160px;'></div>", unsafe_allow_html=True)
+
+
+# =============================
+# FIXED BOTTOM INPUT + CUSTOM UPLOAD BUTTON
+# =============================
+st.markdown("""
+<div class="chat-container">
+    <button class="upload-btn" onclick="document.querySelector('.invisible-file-uploader input').click()">
+        📷
+    </button>
+""", unsafe_allow_html=True)
+
+
+# HIDDEN FILE UPLOADER (triggered by JS)
+hidden_uploader = st.file_uploader(
+    "Upload image",
+    type=["png","jpg","jpeg"],
+    key="hidden_upload",
+    label_visibility="collapsed",
+    help="",
 )
+# Wrap uploader in invisible class
+st.markdown("<div class='invisible-file-uploader'></div>", unsafe_allow_html=True)
 
-# Capture uploaded file
-uploaded_file = st.file_uploader(
-    "hidden_uploader",
-    type=["png", "jpg", "jpeg"],
-    key="real_uploader_streamlit",
-    label_visibility="collapsed"
-)
 
-# ===========================
-# Process uploaded image
-# ===========================
-if uploaded_file is not None:
-    if st.session_state.get("pending_image", {}).get("name") != uploaded_file.name:
-        with st.spinner("Reading image..."):
-            try:
-                img = Image.open(uploaded_file).convert("RGB")
-                big = img.resize((img.width*3, img.height*3), Image.LANCZOS)
-                ocr = pytesseract.image_to_string(big, config=OCR_CONFIG).strip()
+# Chat input
+prompt = st.chat_input("Type your message...")
+st.markdown("</div>", unsafe_allow_html=True)  # end fixed bar
 
-                thumb = img.copy()
-                thumb.thumbnail((300, 300))
-                buf = io.BytesIO()
-                thumb.save(buf, format="PNG")
-                img_bytes = buf.getvalue()
 
-                st.session_state.pending_image = {
-                    "name": uploaded_file.name,
-                    "thumb": img_bytes,
-                    "ocr": ocr
-                }
+# =============================
+# HANDLE IMAGE UPLOAD
+# =============================
+if hidden_uploader is not None:
+    with st.spinner("Reading image..."):
+        try:
+            img = Image.open(hidden_uploader).convert("RGB")
+            big = img.resize((img.width*3, img.height*3), Image.LANCZOS)
+            ocr = pytesseract.image_to_string(big, config=OCR_CONFIG).strip()
 
-                st.success("Image ready!")
+            thumb = img.copy()
+            thumb.thumbnail((300,300))
+            buf = io.BytesIO()
+            thumb.save(buf, format="PNG")
+            img_bytes = buf.getvalue()
 
-            except:
-                st.error("Failed to process image.")
-                st.session_state.pending_image = None
+            st.session_state.pending_image = {
+                "thumb": img_bytes,
+                "ocr": ocr
+            }
 
-# ===========================
-# FIXED BOTTOM CHAT BAR (centered)
-# ===========================
-st.markdown('<div class="chatbar-container">', unsafe_allow_html=True)
+            st.success("Image ready!")
 
-col1, col2, col3 = st.columns([1.2, 6, 1.2])
+        except Exception as e:
+            st.error("Error reading image.")
+            st.session_state.pending_image = None
 
-with col1:
-    # This button triggers the hidden HTML file input
-    st.markdown(
-        f'<button class="upload-btn" onclick="triggerFileUpload()">Upload Image</button>',
-        unsafe_allow_html=True
-    )
 
-with col2:
-    prompt = st.chat_input("Type your message...")
-
-st.markdown('</div>', unsafe_allow_html=True)
-
-# ===========================
-# Handle message send
-# ===========================
+# =============================
+# PROCESS USER MESSAGE
+# =============================
 if prompt:
-    ollama_messages = [
-        {"role": m["role"], "content": m.get("ai_content", m["content"])}
-        for m in st.session_state.messages
-    ]
-
-    ai_text = ""
     image_data = None
+    ai_text = ""
 
-    if st.session_state.get("pending_image"):
-        ocr = st.session_state.pending_image["ocr"]
-        if ocr:
-            ai_text += f"uploaded-image-text{{{ocr}}}\n"
+    if st.session_state.pending_image:
+        if st.session_state.pending_image["ocr"].strip():
+            ai_text += f"uploaded-image-text{{{st.session_state.pending_image['ocr']}}}\n"
         image_data = st.session_state.pending_image["thumb"]
         st.session_state.pending_image = None
 
     ai_text += f"user-query{{{prompt}}}"
 
-    # Save user message
     st.session_state.messages.append({
         "role": "user",
-        "display_text": prompt,
         "content": ai_text,
-        "ai_content": ai_text,
+        "display_text": prompt,
         "image": image_data
     })
 
-    # Display user message immediately
     with st.chat_message("user"):
         st.markdown(prompt)
         if image_data:
             st.image(image_data, width=300)
 
-    # Send to model
+    # Send to your Ollama backend
     with st.chat_message("assistant"):
         placeholder = st.empty()
         full = ""
+
         try:
             payload = {
                 "model": current_model,
-                "messages": ollama_messages + [{"role":"user","content":ai_text}],
+                "messages": st.session_state.messages[:-1] + [{"role":"user","content":ai_text}],
                 "stream": True
             }
 
@@ -252,30 +259,29 @@ if prompt:
                 OLLAMA_CHAT_URL,
                 json=payload,
                 auth=HTTPBasicAuth(USERNAME, PASSWORD),
-                timeout=600,
-                verify=False,
+                timeout=600, verify=False,
                 stream=True
             ) as r:
                 r.raise_for_status()
                 for line in r.iter_lines():
                     if line:
-                        token = json.loads(line).get("message", {}).get("content", "")
+                        token = json.loads(line).get("message",{}).get("content","")
                         full += token
                         placeholder.markdown(full + "▍")
-                        time.sleep(0.01)
                 placeholder.markdown(full)
+
         except:
             full = "Connection failed."
-            placeholder.error(full)
+            placeholder.markdown(full)
 
         st.session_state.messages.append({
-            "role": "assistant",
-            "display_text": full,
+            "role":"assistant",
             "content": full,
-            "ai_content": full
+            "display_text": full
         })
 
-# ===========================
-# Footer
-# ===========================
-st.markdown("<div class='footer'>Spartan AI • Senior Project • Dallin Geurts</div>", unsafe_allow_html=True)
+
+# =============================
+# FOOTER
+# =============================
+st.markdown("<div class='footer'>Spartan AI • Senior Project • 2025</div>", unsafe_allow_html=True)
