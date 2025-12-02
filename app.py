@@ -1,4 +1,4 @@
-# app.py - Spartan AI Demo - Reworked Multi-Tool AI Interface with File Upload (Uploader repositioned)
+# app.py - Spartan AI Demo - Reworked Multi-Tool AI Interface with File Upload
 
 import streamlit as st
 import requests
@@ -136,11 +136,8 @@ for msg in st.session_state.messages:
     with st.chat_message(role):
         st.markdown(content)
 
-# **Repositioned file uploader to just ABOVE the chat input**
+# File uploader (positioned just above chat input)
 uploaded_file = st.file_uploader("Upload an image for OCR (optional)", type=["png", "jpg", "jpeg"])
-
-# User input
-user_input = st.chat_input("Type your message here...")
 
 # Process OCR if new file uploaded
 if uploaded_file and uploaded_file.name != st.session_state.uploaded_file_name:
@@ -152,10 +149,15 @@ if uploaded_file and uploaded_file.name != st.session_state.uploaded_file_name:
         st.session_state.pending_ocr_text = ocr_text
         st.session_state.uploaded_file_name = uploaded_file.name
         st.success("Image processed! OCR text will be included in your next query.")
+        # Clear uploader so file name preview disappears
+        uploaded_file = None
     except Exception as e:
         st.error(f"Error processing image: {e}")
         st.session_state.pending_ocr_text = None
         st.session_state.uploaded_file_name = None
+
+# User input
+user_input = st.chat_input("Type your message here...")
 
 if user_input:
     # Compose user message content, including OCR text if available
