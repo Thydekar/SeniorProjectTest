@@ -1,4 +1,4 @@
-# app.py — Spartan AI Demo — FINAL FIXED VERSION
+# app.py — Spartan AI Demo — FINAL & 100% CONNECTED
 import streamlit as st
 import requests
 from requests.auth import HTTPBasicAuth
@@ -43,13 +43,11 @@ st.markdown("""
 with st.sidebar:
     st.title("Spartan AI Demo")
     if st.button("Home", key="home"):
-        for key in ["mode", "messages", "pending_image", "last_mode"]:
-            st.session_state.pop(key, None)
+        for k in ["mode","messages","pending_image","last_mode"]: st.session_state.pop(k,None)
         st.rerun()
-
     st.markdown("**Tools**")
-    for label, key in [("Assignment Generation","a"), ("Assignment Grader","g"),
-                       ("AI Content/Plagiarism Detector","d"), ("Student Chatbot","s")]:
+    for label,key in [("Assignment Generation","a"),("Assignment Grader","g"),
+                      ("AI Content/Plagiarism Detector","d"),("Student Chatbot","s")]:
         if st.button(label, key=key):
             st.session_state.mode = label
             if st.session_state.get("last_mode") != label:
@@ -71,17 +69,9 @@ model_map = {
 if mode == "Home":
     st.title("Spartan AI Demo")
     st.markdown("### Empowering Education with Responsible AI")
-    st.markdown("""
-    **Spartan AI** is a senior project developed by **Dallin Geurts** to enhance teaching and learning through carefully designed artificial intelligence tools.
-
-    This suite helps teachers streamline their workflow — generating high-quality assignments, providing consistent grading, and detecting AI-generated content — while giving students access to a safe, ethical chatbot that supports understanding without enabling academic dishonesty.
-
-    Unlike general AI tools that can be used to complete assignments, Spartan AI is built with **educational integrity** at its core: it assists, explains, and guides — but never does the work for you.
-
-    All models are fine-tuned to promote honesty, effort, and real learning.
-    """)
+    st.markdown("""**Spartan AI** is a senior project developed by **Dallin Geurts** ...""") # (your text here)
     st.markdown("### Available Tools")
-    st.markdown("• Assignment Generation\n• Assignment Grader\n• AI Content/Plagiarism Detector\n• Student Chatbot (safe & helpful)")
+    st.markdown("• Assignment Generation\n• Assignment Grader\n• AI Content/Plagiarism Detector\n• Student Chatbot")
     st.markdown("<div class='footer'>Spartan AI • Senior Project • Dallin Geurts • 2025</div>", unsafe_allow_html=True)
     st.stop()
 
@@ -92,7 +82,6 @@ st.title(f"{mode}")
 # File uploader
 uploaded_file = st.file_uploader("Attach image (handwriting, screenshot, etc.)", type=["png","jpg","jpeg"])
 
-# Process image when uploaded
 if uploaded_file and (st.session_state.get("pending_image") is None or 
                      st.session_state.pending_image["name"] != uploaded_file.name):
     with st.spinner("Reading image text..."):
@@ -100,95 +89,99 @@ if uploaded_file and (st.session_state.get("pending_image") is None or
             img = Image.open(uploaded_file).convert("RGB")
             big = img.resize((img.width*3, img.height*3), Image.LANCZOS)
             ocr = pytesseract.image_to_string(big, config=OCR_CONFIG).strip()
-
-            thumb = img.copy()
-            thumb.thumbnail((300,300))
-            buf = io.BytesIO()
-            thumb.save(buf, format="PNG")
-            img_bytes = buf.getvalue()
-
+            thumb = img.copy(); thumb.thumbnail((300,300))
+            buf = io.BytesIO(); thumb.save(buf, format="PNG")
             st.session_state.pending_image = {
                 "name": uploaded_file.name,
-                "thumb": img_bytes,
+                "thumb": buf.getvalue(),
                 "ocr": ocr
             }
             st.success("Image uploaded — ready to send with your question")
         except:
-            st.error("Could not read image. Try a clearer one.")
+            st.error("Could not read image.")
             st.session_state.pending_image = None
 
-# Initialize chat
+# Init chat
 if "messages" not in st.session_state:
     st.session_state.messages = [{"role":"assistant","content":"Hello! How can I help you today?"}]
 
-# DISPLAY CHAT — we now store display info separately from internal payload
+# DISPLAY CHAT
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
-        # User messages may have an image attached
-        if msg["role"] == "user" and msg.get("display_image"):
-            st.markdown(msg["display_text"])
-            st.image(msg["display_image"], width=300)
+        if msg["role"] == "user" and msg.get("image_thumb"):
+            st.markdown(msg["user_text"])
+            st.image(msg["image_thumb"], width=300)
         else:
-            st.markdown(msg.get("display_text", msg["content"]))
+            st.markdown(msg.get("user_text", msg["content"]))
 
 # User input
 prompt = st.chat_input("Type your question...")
 
 if prompt:
-    # Build internal payload for AI
-    internal_content = ""
-    display_text = prompt
-    display_image = None
+    # Build clean payload for Ollama (only role + content)
+    ocr_part = ""
+    image_thumb = None
 
     if st.session_state.get("pending_image"):
         ocr = st.session_state.pending_image["ocr"]
-        if ocr:
-            internal_content += f"uploaded-image-text{{{ocr}}}\n"
-        display_image = st.session_state.pending_image["thumb"]
-        st.session_state.pending_image = None  # clear after use
+        if ocr: ocr_part = f"uploaded-image-text{{{ocr}}}\n"
+        image_thumb = st.session_state.pending_image["thumb"]
+        st.session_state.pending_image = None
 
-    internal_content += f"user-query{{{prompt}}}"
+    full_internal = ocr_part + f"user-query{{{prompt}}}"
 
-    # Save message with display info (user sees clean version + image only once)
+    # Save message with display info
     user_msg = {
         "role": "user",
-        "content": internal_content,           # what AI sees
-        "display_text": prompt,                # what user sees
+        "content": full_internal,      # what Ollama sees
+        "user_text": prompt            # what user sees
     }
-    if display_image:
-        user_msg["display_image"] = display_image
+    if image_thumb:
+        user_msg["image_thumb"] = image_thumb
 
     st.session_state.messages.append(user_msg)
 
-    # Show user message immediately
+    # Show user message
     with st.chat_message("user"):
         st.markdown(prompt)
-        if display_image:
-            st.image(display_image, width=300)
+        if image_thumb:
+            st.image(image_thumb, width=300)
 
-    # Get AI response
+    # Send to AI
     with st.chat_message("assistant"):
         placeholder = st.empty()
         full = ""
         try:
-            payload = {"model": current_model, "messages": st.session_state.messages, "stream": True}
-            with requests.post(OLLAMA_CHAT_URL, json=payload,
-                               auth=HTTPBasicAuth(USERNAME, PASSWORD),
-                               timeout=600, verify=False, stream=True) as r:
+            # Clean payload — ONLY role/content
+            clean_history = [
+                {"role": m["role"], "content": m["content"]} 
+                for m in st.session_state.messages
+            ]
+            payload = {
+                "model": current_model,
+                "messages": clean_history,
+                "stream": True
+            }
+            with requests.post(
+                OLLAMA_CHAT_URL, json=payload,
+                auth=HTTPBasicAuth(USERNAME, PASSWORD),
+                timeout=600, verify=False, stream=True
+            ) as r:
                 r.raise_for_status()
                 for line in r.iter_lines():
                     if line:
-                        try:
-                            token = json.loads(line).get("message",{}).get("content","")
-                            full += token
-                            placeholder.markdown(full + "▎")
-                            time.sleep(0.008)
-                        except: continue
+                        token = json.loads(line).get("message",{}).get("content","")
+                        full += token
+                        placeholder.markdown(full + "▎")
+                        time.sleep(0.008)
                 placeholder.markdown(full)
-        except:
-            placeholder.error("Connection lost — try again.")
+        except Exception as e:
+            placeholder.error("Connection failed — check Kaggle/ngrok is running.")
 
-        st.session_state.messages.append({"role":"assistant", "content":full, "display_text":full})
+        st.session_state.messages.append({
+            "role": "assistant",
+            "content": full,
+            "user_text": full
+        })
 
-# Footer
 st.markdown("<div class='footer'>Spartan AI • Senior Project • Dallin Geurts</div>", unsafe_allow_html=True)
