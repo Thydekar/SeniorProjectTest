@@ -24,14 +24,13 @@ OCR_CONFIG = r"--oem 3 --psm 6"
 
 st.set_page_config(page_title="Spartan AI Demo", layout="centered")
 
-
 # =============================
 # MODERN DARK THEME + FIXED BAR
 # =============================
 st.markdown("""
 <style>
     body {background:#0d1117;}
-    .main {background:#0d1117; color:#c9d1d9;}
+    .main {background:#0d1117 !important; color:#c9d1d9;}
     section[data-testid="stSidebar"] {background:#161b22;}
     h1,h2 {color:#58a6ff;}
 
@@ -65,13 +64,14 @@ st.markdown("""
     }
     .upload-btn:hover {background:#2ea043;}
 
-    /* Hide Streamlit file uploader input */
-    .invisible-file-uploader > div > div {
+    /* Fully hide the Streamlit uploader */
+    div[data-testid="stFileUploader"] {
         opacity: 0 !important;
         height: 0px !important;
+        width: 0px !important;
+        overflow: hidden !important;
         padding: 0 !important;
         margin: 0 !important;
-        overflow: hidden !important;
     }
 
     .footer {
@@ -102,7 +102,7 @@ with st.sidebar:
     st.title("Spartan AI Demo")
 
     if st.button("Home", key="home"):
-        for k in ["mode","messages","pending_image"]:
+        for k in ["mode","messages","pending_image", "hidden_upload"]:
             st.session_state.pop(k, None)
         st.rerun()
 
@@ -119,6 +119,7 @@ with st.sidebar:
                 {"role":"assistant","content":"Hello! How can I help you today?"}
             ]
             st.session_state.pending_image = None
+            st.session_state.hidden_upload = None
             st.rerun()
     st.markdown("---")
     st.caption("Senior Project • Dallin Geurts")
@@ -147,7 +148,7 @@ st.title(mode)
 
 
 # =============================
-# CHAT LOG DISPLAY
+# CHAT DISPLAY
 # =============================
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
@@ -155,51 +156,55 @@ for msg in st.session_state.messages:
         if msg.get("image"):
             st.image(msg["image"], width=300)
 
-
-# Spacer so chat doesn't overlap fixed bar
+# Spacer above fixed bar
 st.markdown("<div style='height:160px;'></div>", unsafe_allow_html=True)
 
 
 # =============================
-# FIXED BOTTOM INPUT + CUSTOM UPLOAD BUTTON
+# FIXED BOTTOM BAR
 # =============================
 st.markdown("""
 <div class="chat-container">
-    <button class="upload-btn" onclick="document.querySelector('.invisible-file-uploader input').click()">
+    <button class="upload-btn" id="open-file">
         📷
     </button>
 """, unsafe_allow_html=True)
 
-
-# HIDDEN FILE UPLOADER (triggered by JS)
+# Hidden file uploader (triggered by JS)
 hidden_uploader = st.file_uploader(
     "Upload image",
     type=["png","jpg","jpeg"],
     key="hidden_upload",
-    label_visibility="collapsed",
-    help="",
+    label_visibility="collapsed"
 )
-# Wrap uploader in invisible class
-st.markdown("<div class='invisible-file-uploader'></div>", unsafe_allow_html=True)
 
+# JS to trigger hidden uploader
+st.markdown("""
+<script>
+document.getElementById('open-file').onclick = function() {
+    const fileInput = document.querySelector('input[type="file"]');
+    if (fileInput) fileInput.click();
+}
+</script>
+""", unsafe_allow_html=True)
 
 # Chat input
 prompt = st.chat_input("Type your message...")
-st.markdown("</div>", unsafe_allow_html=True)  # end fixed bar
+st.markdown("</div>", unsafe_allow_html=True)  # end bar
 
 
 # =============================
-# HANDLE IMAGE UPLOAD
+# IMAGE HANDLING
 # =============================
 if hidden_uploader is not None:
     with st.spinner("Reading image..."):
         try:
             img = Image.open(hidden_uploader).convert("RGB")
-            big = img.resize((img.width*3, img.height*3), Image.LANCZOS)
+            big = img.resize((img.width * 3, img.height * 3), Image.LANCZOS)
             ocr = pytesseract.image_to_string(big, config=OCR_CONFIG).strip()
 
             thumb = img.copy()
-            thumb.thumbnail((300,300))
+            thumb.thumbnail((300, 300))
             buf = io.BytesIO()
             thumb.save(buf, format="PNG")
             img_bytes = buf.getvalue()
@@ -211,13 +216,13 @@ if hidden_uploader is not None:
 
             st.success("Image ready!")
 
-        except Exception as e:
-            st.error("Error reading image.")
+        except:
+            st.error("Failed to read image.")
             st.session_state.pending_image = None
 
 
 # =============================
-# PROCESS USER MESSAGE
+# SEND USER MESSAGE
 # =============================
 if prompt:
     image_data = None
@@ -227,10 +232,10 @@ if prompt:
         if st.session_state.pending_image["ocr"].strip():
             ai_text += f"uploaded-image-text{{{st.session_state.pending_image['ocr']}}}\n"
         image_data = st.session_state.pending_image["thumb"]
-        st.session_state.pending_image = None
 
     ai_text += f"user-query{{{prompt}}}"
 
+    # Append user message
     st.session_state.messages.append({
         "role": "user",
         "content": ai_text,
@@ -243,7 +248,13 @@ if prompt:
         if image_data:
             st.image(image_data, width=300)
 
-    # Send to your Ollama backend
+    # Clear image so it doesn't attach again
+    st.session_state.pending_image = None
+    st.session_state.hidden_upload = None
+
+    # ============================
+    # AI RESPONSE
+    # ============================
     with st.chat_message("assistant"):
         placeholder = st.empty()
         full = ""
@@ -251,7 +262,8 @@ if prompt:
         try:
             payload = {
                 "model": current_model,
-                "messages": st.session_state.messages[:-1] + [{"role":"user","content":ai_text}],
+                "messages": st.session_state.messages[:-1]
+                           + [{"role": "user", "content": ai_text}],
                 "stream": True
             }
 
@@ -259,23 +271,26 @@ if prompt:
                 OLLAMA_CHAT_URL,
                 json=payload,
                 auth=HTTPBasicAuth(USERNAME, PASSWORD),
-                timeout=600, verify=False,
+                timeout=600,
+                verify=False,
                 stream=True
             ) as r:
                 r.raise_for_status()
+
                 for line in r.iter_lines():
                     if line:
-                        token = json.loads(line).get("message",{}).get("content","")
+                        token = json.loads(line).get("message", {}).get("content", "")
                         full += token
                         placeholder.markdown(full + "▍")
+
                 placeholder.markdown(full)
 
         except:
             full = "Connection failed."
-            placeholder.markdown(full)
+            placeholder.error(full)
 
         st.session_state.messages.append({
-            "role":"assistant",
+            "role": "assistant",
             "content": full,
             "display_text": full
         })
