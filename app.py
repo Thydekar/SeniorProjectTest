@@ -1,4 +1,4 @@
-# app.py — Spartan AI Demo — FINAL & ABSOLUTELY PERFECT
+# app.py — Spartan AI Demo — FINAL & FLAWLESS (Toggle upload, perfect layout)
 import streamlit as st
 import requests
 from requests.auth import HTTPBasicAuth
@@ -23,40 +23,61 @@ OCR_CONFIG = r"--oem 3 --psm 6"
 
 st.set_page_config(page_title="Spartan AI Demo", layout="centered")
 
-# CLEAN, BEAUTIFUL CSS
+# CLEAN, MODERN CSS
 st.markdown("""
 <style>
-    .main {background:#0d1117; color:#c9d1d9; padding-bottom:100px;}
+    .main {background:#0d1117; color:#c9d1d9;}
     section[data-testid="stSidebar"] {background:#161b22;}
     
-    /* Upload button — clean and beautiful */
-    .upload-btn button {
+    /* Upload toggle button */
+    .upload-toggle button {
         background:#238636 !important;
         color:white !important;
         border:none !important;
         border-radius:12px !important;
-        padding:10px 20px !important;
+        padding:10px 18px !important;
         font-size:14px !important;
         font-weight:600 !important;
-        box-shadow:0 2px 6px rgba(0,0,0,0.3) !important;
+        margin-right:12px !important;
     }
-    .upload-btn button:hover {
-        background:#2ea043 !important;
+    .upload-toggle button:hover {background:#2ea043 !important;}
+    
+    /* Hide default uploader visuals when not active */
+    .stFileUploader > div > div {display:none !important;}
+    .stFileUploader > div > div > div {display:block !important;}
+    
+    /* Chat input container */
+    .chat-container {
+        position:fixed;
+        bottom:20px;
+        left:50%;
+        transform:translateX(-50%);
+        width:90%;
+        max-width:800px;
+        background:#0d1117;
+        padding:16px;
+        border-radius:16px;
+        border:1px solid #30363d;
+        z-index:1000;
+        display:flex;
+        align-items:center;
+        gap:12px;
     }
     
-    /* Chat always at bottom */
-    .stChatInput {position:fixed; bottom:0; left:0; right:0; background:#0d1117; padding:20px; z-index:1000; border-top:1px solid #30363d;}
-    
-    .footer {text-align:center; color:#8b949e; font-size:0.85em; margin-top:60px; padding-bottom:120px;}
+    .footer {text-align:center; color:#8b949e; font-size:0.85em; margin-top:60px; padding-bottom:140px;}
     h1,h2 {color:#58a6ff;}
 </style>
 """, unsafe_allow_html=True)
+
+# Initialize toggle state
+if "show_uploader" not in st.session_state:
+    st.session_state.show_uploader = False
 
 # SIDEBAR
 with st.sidebar:
     st.title("Spartan AI Demo")
     if st.button("Home", key="home"):
-        for k in ["mode","messages","pending_image","last_mode"]:
+        for k in ["mode","messages","pending_image","last_mode","show_uploader"]:
             st.session_state.pop(k, None)
         st.rerun()
 
@@ -69,6 +90,7 @@ with st.sidebar:
                 st.session_state.messages = [{"role":"assistant","content":"Hello! How can I help you today?"}]
                 st.session_state.last_mode = label
             st.session_state.pending_image = None
+            st.session_state.show_uploader = False
             st.rerun()
     st.markdown("---")
     st.caption("Senior Project by Dallin Geurts")
@@ -84,13 +106,7 @@ model_map = {
 if mode == "Home":
     st.title("Spartan AI Demo")
     st.markdown("### Empowering Education with Responsible AI")
-    st.markdown("""
-    **Spartan AI** is a senior project developed by **Dallin Geurts** to enhance teaching and learning through carefully designed artificial intelligence tools.
-    This suite helps teachers streamline their workflow while giving students a safe, ethical chatbot that supports understanding without enabling academic dishonesty.
-    All models are fine-tuned to promote honesty, effort, and real learning.
-    """)
-    st.markdown("### Available Tools")
-    st.markdown("• Assignment Generation\n• Assignment Grader\n• AI Content/Plagiarism Detector\n• Student Chatbot (safe & helpful)")
+    st.markdown("...")
     st.markdown("<div class='footer'>Spartan AI • Senior Project • Dallin Geurts • 2025</div>", unsafe_allow_html=True)
     st.stop()
 
@@ -101,26 +117,40 @@ st.title(f"{mode}")
 if "messages" not in st.session_state:
     st.session_state.messages = [{"role":"assistant","content":"Hello! How can I help you today?"}]
 
-# Display chat history
+# Display chat
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg.get("display_text", msg.get("content", "")))
         if msg.get("image"):
             st.image(msg["image"], width=300)
 
-# === FIXED BOTTOM CHAT BAR ===
-# Force empty space so chat stays above input
-st.markdown("<div style='height:120px;'></div>", unsafe_allow_html=True)
+# Bottom padding so content doesn't hide under fixed bar
+st.markdown("<div style='height:140px;'></div>", unsafe_allow_html=True)
 
-# Hidden file uploader — triggered by button
-uploaded_file = st.file_uploader(
-    "Upload image",
-    type=["png", "jpg", "jpeg"],
-    key="file_uploader",
-    label_visibility="collapsed"
-)
+# FIXED BOTTOM CHAT BAR — PERFECT LAYOUT
+st.markdown("<div class='chat-container'>", unsafe_allow_html=True)
 
-# Process uploaded image
+# Upload toggle button
+if st.button("Upload image", key="toggle_upload", help="Click to attach an image"):
+    st.session_state.show_uploader = not st.session_state.show_uploader
+
+# Show uploader only when toggled
+if st.session_state.show_uploader:
+    uploaded_file = st.file_uploader(
+        "Choose an image",
+        type=["png", "jpg", "jpeg"],
+        key="uploader",
+        label_visibility="collapsed"
+    )
+else:
+    uploaded_file = None
+
+# Chat input
+prompt = st.chat_input("Type your message...")
+
+st.markdown("</div>", unsafe_allow_html=True)
+
+# Process image
 if uploaded_file is not None:
     if st.session_state.get("pending_image", {}).get("name") != uploaded_file.name:
         with st.spinner("Reading image..."):
@@ -137,18 +167,10 @@ if uploaded_file is not None:
 
                 st.session_state.pending_image = {"name": uploaded_file.name, "thumb": img_bytes, "ocr": ocr}
                 st.success("Image ready!")
+                st.session_state.show_uploader = False  # auto-hide after upload
             except:
                 st.error("Failed to read image.")
                 st.session_state.pending_image = None
-
-# Upload button + chat input (bottom fixed)
-col1, col2 = st.columns([1.8, 6])
-with col1:
-    if st.button("Upload image", key="upload_trigger"):
-        # This triggers the hidden uploader above
-        pass
-with col2:
-    prompt = st.chat_input("Type your message...")
 
 # Handle message
 if prompt:
