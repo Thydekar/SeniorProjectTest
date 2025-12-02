@@ -79,7 +79,7 @@ current_model = model_map[mode]
 
 # ───────────────────────────── HOME PAGE ─────────────────────────────
 if len(st.session_state.get("messages", [])) == 0 and not st.session_state.get("started", False):
-    st.title("Shield Spartan AI Demo")
+    st.title("Spartan AI Demo")
     st.markdown("### Empowering Education with Responsible AI")
 
     st.markdown("""
