@@ -1,4 +1,4 @@
-# app.py — Spartan AI Demo — FINAL & ACTUALLY WORKS (Fixed upload + perfect bottom bar)
+# app.py — Spartan AI Demo — FINAL & EXACTLY WHAT YOU WANTED
 import streamlit as st
 import requests
 from requests.auth import HTTPBasicAuth
@@ -6,9 +6,10 @@ import json
 import time
 import pytesseract
 from PIL import Image
-import io
 
-# CONFIG
+# =============================
+# CONFIG — EDIT ONLY THESE
+# =============================
 NGROK_URL = "https://ona-overcritical-extrinsically.ngrok-free.dev"
 MODEL_ASSIGNMENT_GEN = "gemma3"
 MODEL_GRADER         = "spartan-grader"
@@ -22,15 +23,17 @@ OCR_CONFIG = r"--oem 3 --psm 6"
 
 st.set_page_config(page_title="Spartan AI Demo", layout="centered")
 
-# PERFECT CSS — FIXED BOTTOM BAR + REAL FILE PICKER
+# =============================
+# CLEAN PROFESSIONAL CSS
+# =============================
 st.markdown("""
 <style>
     .main {background:#0d1117; color:#c9d1d9;}
     section[data-testid="stSidebar"] {background:#161b22;}
     h1,h2 {color:#58a6ff;}
     
-    /* Bottom bar — perfectly fixed and aligned */
-    .fixed-bottom-bar {
+    /* Fixed bottom bar */
+    .bottom-bar {
         position: fixed;
         bottom: 0;
         left: 50%;
@@ -45,10 +48,9 @@ st.markdown("""
         gap: 12px;
         z-index: 99999;
         border-radius: 16px 16px 0 0;
-        box-shadow: 0 -4px 20px rgba(0,0,0,0.3);
     }
     
-    /* Clean upload button */
+    /* Upload button */
     .upload-btn button {
         background: #30363d !important;
         color: #c9d1d9 !important;
@@ -57,14 +59,13 @@ st.markdown("""
         padding: 10px 20px !important;
         font-size: 14px !important;
         font-weight: 500 !important;
-        white-space: nowrap;
     }
     .upload-btn button:hover {
         background: #404040 !important;
         border-color: #58a6ff !important;
     }
     
-    /* Hide ugly uploader but keep functionality */
+    /* Hide file uploader completely */
     .stFileUploader {display: none !important;}
     
     .footer {
@@ -77,21 +78,25 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# STATE
+# =============================
+# SESSION STATE
+# =============================
 if "messages" not in st.session_state:
     st.session_state.messages = []
-if "pending_image" not in st.session_state:
-    st.session_state.pending_image = None
+if "pending_ocr_text" not in st.session_state:
+    st.session_state.pending_ocr_text = None
 if "mode" not in st.session_state:
     st.session_state.mode = "Home"
 
+# =============================
 # SIDEBAR
+# =============================
 with st.sidebar:
     st.title("Spartan AI Demo")
     if st.button("Home"):
         st.session_state.mode = "Home"
         st.session_state.messages = []
-        st.session_state.pending_image = None
+        st.session_state.pending_ocr_text = None
         st.rerun()
 
     st.markdown("**Tools**")
@@ -100,7 +105,7 @@ with st.sidebar:
         if st.button(label, key=key):
             st.session_state.mode = label
             st.session_state.messages = [{"role":"assistant","content":"Hello! How can I help you today?"}]
-            st.session_state.pending_image = None
+            st.session_state.pending_ocr_text = None
             st.rerun()
     st.markdown("---")
     st.caption("Senior Project by Dallin Geurts")
@@ -116,93 +121,87 @@ model_map = {
 if mode == "Home":
     st.title("Spartan AI Demo")
     st.markdown("### Empowering Education with Responsible AI")
-    st.markdown("Spartan AI helps teachers and students with ethical, powerful tools.")
+    st.markdown("Spartan AI helps teachers and students with ethical AI tools.")
     st.markdown("<div class='footer'>Spartan AI • Senior Project • Dallin Geurts • 2025</div>", unsafe_allow_html=True)
     st.stop()
 
 current_model = model_map[mode]
 st.title(mode)
 
-# CHAT HISTORY
+# =============================
+# DISPLAY CHAT (no images shown)
+# =============================
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
-        st.markdown(msg.get("display_text", msg["content"]))
-        if msg.get("image"):
-            st.image(msg["image"], width=300)
+        st.markdown(msg["display_text"])
 
 # Bottom padding
 st.markdown("<div style='height: 180px;'></div>", unsafe_allow_html=True)
 
-# THE MAGIC: CUSTOM BUTTON THAT OPENS REAL FILE PICKER
+# =============================
+# BOTTOM BAR — UPLOAD + CHAT INPUT
+# =============================
+st.markdown("<div class='bottom-bar'>", unsafe_allow_html=True)
+
+# Custom upload button (triggers hidden uploader)
 st.markdown("""
-<div class="fixed-bottom-bar">
+<label for="hidden-uploader" style="cursor:pointer;">
     <div class="upload-btn">
-        <label for="file-upload" style="cursor:pointer; margin:0;">
-            Upload image
-        </label>
-        <input id="file-upload" type="file" accept="image/*" style="display:none;">
+        <button>Upload image</button>
     </div>
+</label>
+<input id="hidden-uploader" type="file" accept="image/*" style="display:none;">
 """, unsafe_allow_html=True)
 
-# Hidden real file input (triggered by label)
-uploaded_file = st.file_uploader("", key="real_upload", type=["png","jpg","jpeg"], label_visibility="collapsed")
+# Hidden file uploader
+uploaded_file = st.file_uploader("", key="hidden_upload", type=["png","jpg","jpeg"], label_visibility="collapsed")
 
 # Chat input
 prompt = st.chat_input("Type your message...")
 
-st.markdown("</div>", unsafe_allow_html=True)  # close fixed-bottom-bar
+st.markdown("</div>", unsafe_allow_html=True)
 
-# PROCESS IMAGE UPLOAD
+# =============================
+# PROCESS UPLOADED IMAGE (OCR silently)
+# =============================
 if uploaded_file is not None:
-    if st.session_state.pending_image is None or st.session_state.pending_image.get("name") != uploaded_file.name:
-        with st.spinner("Reading image..."):
+    if st.session_state.pending_ocr_text is None or st.session_state.get("last_uploaded") != uploaded_file.name:
+        with st.spinner("Processing image..."):
             try:
                 img = Image.open(uploaded_file).convert("RGB")
                 big = img.resize((img.width*3, img.height*3), Image.LANCZOS)
-                ocr = pytesseract.image_to_string(big, config=OCR_CONFIG).strip()
-
-                thumb = img.copy()
-                thumb.thumbnail((300,300))
-                buf = io.BytesIO()
-                thumb.save(buf, format="PNG")
-                img_bytes = buf.getvalue()
-
-                st.session_state.pending_image = {
-                    "name": uploaded_file.name,
-                    "thumb": img_bytes,
-                    "ocr": ocr
-                }
-                st.success("Image ready!")
+                ocr_text = pytesseract.image_to_string(big, config=OCR_CONFIG).strip()
+                
+                st.session_state.pending_ocr_text = ocr_text if ocr_text else "(No text found)"
+                st.session_state.last_uploaded = uploaded_file.name
+                st.success("Image processed")
             except:
-                st.error("Failed to read image.")
-                st.session_state.pending_image = None
+                st.error("Failed to process image.")
+                st.session_state.pending_ocr_text = None
 
+# =============================
 # SEND MESSAGE
+# =============================
 if prompt:
-    image_data = None
-    ocr_text = ""
-
-    if st.session_state.pending_image:
-        ocr_text = st.session_state.pending_image["ocr"]
-        image_data = st.session_state.pending_image["thumb"]
-        st.session_state.pending_image = None  # CLEARED — no repeat
-
+    # Build message content
     user_content = f"user-query{{{prompt}}}"
-    if ocr_text:
-        user_content = f"uploaded-image-text{{{ocr_text}}}\n{user_content}"
+    
+    if st.session_state.pending_ocr_text:
+        user_content = f"uploaded-image-text{{{st.session_state.pending_ocr_text}}}\n{user_content}"
+        st.session_state.pending_ocr_text = None  # Clear after first use
 
+    # Save message
     st.session_state.messages.append({
         "role": "user",
         "content": user_content,
-        "display_text": prompt,
-        "image": image_data
+        "display_text": prompt
     })
 
+    # Show user message
     with st.chat_message("user"):
         st.markdown(prompt)
-        if image_data:
-            st.image(image_data, width=300)
 
+    # Get AI response
     with st.chat_message("assistant"):
         placeholder = st.empty()
         full = ""
@@ -220,11 +219,12 @@ if prompt:
                     if line:
                         token = json.loads(line).get("message",{}).get("content","")
                         full += token
-                        placeholder.markdown(full + "▍")
+                        placeholder.markdown(full + "cursor")
                         time.sleep(0.01)
                 placeholder.markdown(full)
         except:
-            placeholder.markdown("Connection failed.")
+            full = "Sorry, I couldn't connect right now."
+            placeholder.markdown(full)
 
         st.session_state.messages.append({
             "role": "assistant",
@@ -232,5 +232,7 @@ if prompt:
             "display_text": full
         })
 
-# Footer
+# =============================
+# FOOTER
+# =============================
 st.markdown("<div class='footer'>Spartan AI • Senior Project • Dallin Geurts</div>", unsafe_allow_html=True)
