@@ -1,4 +1,4 @@
-# app.py — Spartan AI Demo — Final Version
+# app.py — Spartan AI Demo — Final Professional Version
 import streamlit as st
 import requests
 from requests.auth import HTTPBasicAuth
@@ -10,7 +10,7 @@ from PIL import Image
 # ──────────────────────── EDIT ONLY THESE ────────────────────────
 NGROK_URL = "https://ona-overcritical-extrinsically.ngrok-free.dev"
 
-MODEL_ASSIGNMENT_GEN = "gemma3"
+MODEL_ASSIGNMENT_GEN = "spartan-assignment"
 MODEL_GRADER         = "spartan-grader"
 MODEL_PLAGIARISM     = "spartan-detector"
 MODEL_STUDENT_CHAT   = "spartan-student"
@@ -22,30 +22,27 @@ PASSWORD = "thaidakar21"
 
 st.set_page_config(page_title="Spartan AI Demo", layout="centered")
 
-# Clean dark theme + black & blue buttons
+# Clean dark theme + big bold sidebar buttons
 st.markdown("""
 <style>
     .main {background: #0d1117; color: #c9d1d9;}
     .stApp {background: #0d1117;}
     section[data-testid="stSidebar"] {background: #161b22; border-right: 1px solid #30363d;}
     
-    /* Buttons: black background, white text */
+    /* Sidebar buttons — large, bold, black & blue */
     .stButton > button {
-        width: 100%; margin: 8px 0; background: #21262d; color: white;
-        border: 1px solid #30363d; border-radius: 12px; padding: 14px;
-        font-weight: 600; font-size: 16px; transition: all 0.2s;
+        width: 100%; margin: 10px 0; background: #21262d; color: white;
+        border: 1px solid #30363d; border-radius: 14px; padding: 16px;
+        font-weight: 700; font-size: 18px; transition: all 0.2s;
     }
-    }
-    /* Hover: no change */
     .stButton > button:hover {background: #21262d; border-color: #30363d;}
-    /* Active/selected: blue background + black text */
     .stButton > button:active,
     .stButton > button[data-active="true"] {
         background: #58a6ff !important; color: black !important; border-color: #58a6ff;
     }
     
     .stTextInput > div > div > input {background: #21262d; color: white; border: 1px solid #30363d; border-radius: 16px;}
-    .ocr-box {background: #1e1e2e; padding: 14px; border-radius: 10px; border: 1px solid #30363d; font-size: 0.95em;}
+    .uploaded-image {border-radius: 10px; margin: 10px 0;}
     .footer {text-align: center; color: #8b949e; font-size: 0.85em; margin-top: 60px; padding: 20px;}
     h1, h2 {color: #58a6ff;}
 </style>
@@ -55,8 +52,7 @@ st.markdown("""
 with st.sidebar:
     st.title("Spartan AI Demo")
 
-    # Home Button (always first)
-    if st.button("Home", key="home_btn"):
+    if st.button("Home", key="home"):
         st.session_state.mode = "Home"
         st.session_state.messages = []
         st.rerun()
@@ -73,7 +69,6 @@ with st.sidebar:
     for label, key in tools:
         if st.button(label, key=key):
             st.session_state.mode = label
-            # Auto-start chat when tool selected
             if "messages" not in st.session_state or st.session_state.get("last_mode") != label:
                 st.session_state.messages = [{"role": "assistant", "content": "Hello! How can I help you today?"}]
                 st.session_state.last_mode = label
@@ -82,7 +77,6 @@ with st.sidebar:
     st.markdown("---")
     st.caption("Senior Project by Dallin Geurts")
 
-# Current mode
 mode = st.session_state.get("mode", "Home")
 
 model_map = {
@@ -122,41 +116,60 @@ if mode == "Home":
 current_model = model_map[mode]
 st.title(f"{mode}")
 
-# Image Upload + OCR
-uploaded_file = st.file_uploader("Upload image (handwriting, screenshot, etc.)", type=["png", "jpg", "jpeg"])
-ocr_text = ""
-
-if uploaded_file:
-    image = Image.open(uploaded_file)
-    st.image(image, width=400)
-    with st.spinner("Extracting text from image..."):
-        try:
-            ocr_text = pytesseract.image_to_string(image)
-            st.markdown(f"<div class='ocr-box'><strong>Text from image:</strong><br><pre>{ocr_text.strip()}</pre></div>", unsafe_allow_html=True)
-        except:
-            st.error("Could not read image text.")
-
-# Initialize messages for this tool
+# Initialize chat
 if "messages" not in st.session_state:
     st.session_state.messages = [{"role": "assistant", "content": "Hello! How can I help you today?"}]
 
-# Display chat
+# Display chat history
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
-# Input
-prompt = st.chat_input("Ask a question...")
+# Chat input with file upload in the bar
+with st.container():
+    cols = st.columns([0.07, 1])
+    with cols[0]:
+        uploaded_file = st.file_uploader("", type=["png", "jpg", "jpeg"], label_visibility="collapsed")
+    with cols[1]:
+        prompt = st.chat_input("Ask a question...")
 
-if prompt or ocr_text:
-    user_msg = prompt or ""
+# Process upload + message
+if uploaded_file or prompt:
+    ocr_text = ""
+    image_preview = None
+
+    if uploaded_file:
+        image = Image.open(uploaded_file)
+        image_preview = image.copy()
+        image_preview.thumbnail((300, 300))
+        with st.chat_message("user"):
+            st.image(image_preview, caption="Image attached", use_column_width=False, output_format="PNG")
+            if prompt:
+                st.markdown(prompt)
+            else:
+                st.markdown("*Image uploaded*")
+
+        with st.spinner("Reading text from image..."):
+            try:
+                ocr_text = pytesseract.image_to_string(image)
+            except:
+                ocr_text = "[OCR failed — image too blurry or unsupported]"
+
+    # Build internal message (hidden from user)
+    internal_message = ""
     if ocr_text:
-        user_msg = f"Image uploaded — text content:\n\"\"\"\n{ocr_text.strip()}\n\"\"\"\n\n{user_msg}".strip()
+        internal_message += f"uploaded-image-text{{{ocr_text.strip()}}}"
+    if prompt:
+        internal_message += f"user-query{{{prompt.strip()}}}"
 
-    st.session_state.messages.append({"role": "user", "content": user_msg})
-    with st.chat_message("user"):
-        st.markdown(user_msg)
+    # Show only user-facing message
+    user_display = prompt or "*Image uploaded*"
 
+    st.session_state.messages.append({"role": "user", "content": user_display})
+    if uploaded_file:
+        st.session_state.messages[-1]["image"] = image_preview  # for display only
+
+    # Send to AI
     with st.chat_message("assistant"):
         placeholder = st.empty()
         full = ""
@@ -164,7 +177,7 @@ if prompt or ocr_text:
         try:
             payload = {
                 "model": current_model,
-                "messages": st.session_state.messages,
+                "messages": st.session_state.messages[:-1] + [{"role": "user", "content": internal_message}],
                 "stream": True
             }
 
@@ -189,8 +202,8 @@ if prompt or ocr_text:
                             continue
                 placeholder.markdown(full)
 
-        except Exception:
-            placeholder.error("Connection issue — please try again in a moment.")
+        except Exception as e:
+            placeholder.error("Connection lost — please try again.")
 
         st.session_state.messages.append({"role": "assistant", "content": full})
 
