@@ -1,4 +1,4 @@
-# app.py - Spartan AI Demo - FINAL with perfect Thinking → typing cursor
+# app.py - Spartan AI Demo - FINAL + INTERNET & TIME ACCESS
 import streamlit as st
 import requests
 from requests.auth import HTTPBasicAuth
@@ -7,6 +7,8 @@ import time
 import pytesseract
 from PIL import Image
 import io
+from datetime import datetime
+import re
 
 # Graceful imports
 try:
@@ -23,8 +25,8 @@ except ImportError:
 # Config
 NGROK_URL = "https://ona-overcritical-extrinsically.ngrok-free.dev"
 MODEL_MAP = {
-    "Assignment Generation": "gemma3",
-    "Assignment Grader": "phi3:mini",
+    "Assignment Generation": "phi3:mini",
+    "Assignment Grader": "spartan-grader",
     "AI Content/Plagiarism Detector": "spartan-detector",
     "Student Chatbot": "spartan-student",
 }
@@ -35,7 +37,7 @@ OCR_CONFIG = r"--oem 3 --psm 6"
 
 st.set_page_config(page_title="Spartan AI Demo", layout="wide")
 
-# CSS + Thinking animation
+# CSS
 st.markdown("""
 <style>
     body, .css-18e3th9 {background-color: #0d1117 !important; color: #c9d1d9 !important;}
@@ -47,23 +49,12 @@ st.markdown("""
     .stChatMessage.assistant {background-color: #f0ad4e !important; border-radius: 12px !important; color: black !important;}
     footer {visibility: hidden; height: 40px;}
     .footer-text {text-align: center; color: #8b949e; font-size: 0.85em; padding: 20px 0;}
-    
-    .thinking {
-        display: inline-block;
-        font-size: 1.2em;
-        font-weight: bold;
-        color: #58a6ff;
-    }
-    .dot {
-        animation: blink 1.4s infinite both;
-    }
+    .thinking {display: inline-block; font-size: 1.2em; font-weight: bold; color: #58a6ff;}
+    .dot {animation: blink 1.4s infinite both;}
     .dot:nth-child(1) {animation-delay: 0s;}
     .dot:nth-child(2) {animation-delay: 0.2s;}
     .dot:nth-child(3) {animation-delay: 0.4s;}
-    @keyframes blink {
-        0%, 80%, 100% {opacity: 0.3;}
-        20% {opacity: 1;}
-    }
+    @keyframes blink {0%, 80%, 100% {opacity: 0.3;} 20% {opacity: 1;}}
 </style>
 """, unsafe_allow_html=True)
 
@@ -105,7 +96,6 @@ if st.session_state.mode == "Home":
     st.markdown('<div class="footer-text">Spartan AI • Senior Project • Dallin Geurts • 2025</div>', unsafe_allow_html=True)
     st.stop()
 
-# Main
 current_tool = st.session_state.mode
 model = MODEL_MAP[current_tool]
 st.title(current_tool)
@@ -115,13 +105,10 @@ for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg.get("display_text", msg["content"]))
 
-# File uploader
-uploaded_file = st.file_uploader(
-    "Upload a file (PDF, DOCX, TXT, images, etc.) — text will be extracted automatically",
-    type=["pdf","docx","txt","png","jpg","jpeg","gif","bmp","tiff"]
-)
+# File uploader + OCR (unchanged)
+uploaded_file = st.file_uploader("Upload a file (PDF, DOCX, TXT, images, etc.) — text will be extracted automatically",
+    type=["pdf","docx","txt","png","jpg","jpeg","gif","bmp","tiff"])
 
-# Extract text
 if uploaded_file and uploaded_file.name != st.session_state.uploaded_file_name:
     with st.spinner("Extracting text from file..."):
         extracted_text = ""
@@ -151,10 +138,22 @@ if uploaded_file and uploaded_file.name != st.session_state.uploaded_file_name:
             st.error(f"Error reading file: {e}")
             st.session_state.pending_ocr_text = None
 
+# Internet search function
+def web_search(query):
+    if "current time" in query.lower():
+        return f"The current time is: {datetime.now().strftime('%A, %B %d, %Y at %I:%M %p')}"
+    try:
+        url = f"https://api.duckduckgo.com/?q={requests.utils.quote(query)}&format=json&no_html=1"
+        response = requests.get(url, timeout=10)
+        data = response.json()
+        answer = data.get("AbstractText") or data.get("Answer") or "No good result found."
+        return answer[:1500]
+    except:
+        return "Search failed."
+
 # User input
 user_input = st.chat_input("Type your message here...")
 if user_input:
-    # Build message
     if st.session_state.pending_ocr_text:
         content = f"uploaded-file-text{{{st.session_state.pending_ocr_text}}}\nuser-query{{{user_input}}}"
         st.session_state.pending_ocr_text = None
@@ -165,13 +164,10 @@ if user_input:
     with st.chat_message("user"):
         st.markdown(user_input)
 
-    # AI RESPONSE — PERFECT THINKING → TYPING CURSOR
+    # AI RESPONSE WITH INTERNET + PERFECT THINKING → TYPING
     with st.chat_message("assistant"):
         thinking_placeholder = st.empty()
-        thinking_placeholder.markdown(
-            '<div class="thinking">Thinking<span class="dot">.</span><span class="dot">.</span><span class="dot">.</span></div>',
-            unsafe_allow_html=True
-        )
+        thinking_placeholder.markdown('<div class="thinking">Thinking<span class="dot">.</span><span class="dot">.</span><span class="dot">.</span></div>', unsafe_allow_html=True)
 
         response_placeholder = st.empty()
         full_response = ""
@@ -189,18 +185,48 @@ if user_input:
             ) as r:
                 r.raise_for_status()
                 first_token = True
+                buffer = ""
+
                 for line in r.iter_lines():
                     if line:
                         token = json.loads(line).get("message", {}).get("content", "")
+                        buffer += token
                         full_response += token
+
+                        # Detect search{...}
+                        if "search{" in buffer and "}" in buffer:
+                            match = re.search(r"search\{([^}]*)\}", buffer)
+                            if match:
+                                query = match.group(1).strip()
+                                thinking_placeholder.markdown("Searching the web...")
+                                result = web_search(query)
+                                # Inject result
+                                st.session_state.messages.append({
+                                    "role": "system",
+                                    "content": f"Search result for '{query}': {result}",
+                                    "display_text": f"Search result: {result}"
+                                })
+                                buffer = ""  # clear buffer so we don't search again
+                                # Restart streaming with new context
+                                payload["messages"] = [{"role": m["role"], "content": m["content"]} for m in st.session_state.messages]
+                                r.close()
+                                r = requests.post(
+                                    OLLAMA_CHAT_URL, json=payload,
+                                    auth=HTTPBasicAuth(USERNAME, PASSWORD),
+                                    timeout=600, verify=False, stream=True
+                                )
+                                continue
+
                         if first_token:
                             thinking_placeholder.empty()
                             first_token = False
-                        response_placeholder.markdown(full_response + "▋", unsafe_allow_html=True)
+                        response_placeholder.markdown(full_response + "cursor", unsafe_allow_html=True)
                         time.sleep(0.01)
+
                 response_placeholder.markdown(full_response)
                 thinking_placeholder.empty()
-        except Exception:
+
+        except Exception as e:
             thinking_placeholder.empty()
             response_placeholder.markdown("Sorry, I couldn't connect right now.")
 
