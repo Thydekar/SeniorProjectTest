@@ -1,4 +1,5 @@
-# app.py — Spartan AI Demo (Final Fixed Version)
+# app.py - Spartan AI Demo - Reworked Multi-Tool AI Interface with File Upload
+
 import streamlit as st
 import requests
 from requests.auth import HTTPBasicAuth
@@ -7,9 +8,7 @@ import time
 import pytesseract
 from PIL import Image
 
-# =============================
-# CONFIG
-# =============================
+# Config
 NGROK_URL = "https://ona-overcritical-extrinsically.ngrok-free.dev"
 MODEL_MAP = {
     "Assignment Generation": "gemma3",
@@ -23,252 +22,198 @@ USERNAME = "dgeurts"
 PASSWORD = "thaidakar21"
 OCR_CONFIG = r"--oem 3 --psm 6"
 
-st.set_page_config(page_title="Spartan AI Demo", layout="centered")
+# Page config
+st.set_page_config(page_title="Spartan AI Demo", layout="wide")
 
-# =============================
-# CSS (BOTTOM BAR FIXED)
-# =============================
-CSS = """
+# Custom CSS for styling
+st.markdown("""
 <style>
-    html, body, [data-testid="stAppViewContainer"] {
-        padding: 0 !important;
-        margin: 0 !important;
-        height: 100%;
-        background: #0d1117 !important;
+    /* General background and text */
+    body, .css-18e3th9 {
+        background-color: #0d1117 !important;
         color: #c9d1d9 !important;
     }
 
-    /* Remove Streamlit's built-in chat padding */
-    .stChatInputContainer {
-        padding-bottom: 0 !important;
+    /* Sidebar styling */
+    section[data-testid="stSidebar"] {
+        background-color: #161b22 !important;
+        color: #c9d1d9 !important;
+    }
+    .css-1d391kg {
+        color: #58a6ff !important;
     }
 
-    .main {background:#0d1117; color:#c9d1d9;}
-    section[data-testid="stSidebar"] {background:#161b22;}
-    h1,h2 {color:#58a6ff;}
-
-    /* Fixed bottom bar */
-    .bottom-bar {
-        position: fixed;
-        bottom: 0;
-        left: 50%;
-        transform: translateX(-50%);
-        width: 90%;
-        max-width: 800px;
-        background: #0d1117;
-        border-top: 1px solid #30363d;
-        padding: 14px 16px;
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        z-index: 99999;
-        border-radius: 16px 16px 0 0;
-        box-shadow: 0 -4px 20px rgba(0,0,0,0.3);
+    /* Headings */
+    h1, h2, h3 {
+        color: #58a6ff !important;
     }
 
-    .upload-btn button {
-        background:#30363d !important;
-        color:#c9d1d9 !important;
-        border-radius:12px !important;
-        border:1px solid #404040 !important;
-        padding:10px 24px !important;
-        font-size:14px;
-    }
-    .upload-btn button:hover {
-        background:#404040 !important;
-        border-color:#58a6ff !important;
+    /* File uploader */
+    .stFileUploader > div {
+        background: #161b22 !important;
+        border: 1px solid #30363d !important;
+        border-radius: 8px !important;
+        padding: 8px !important;
+        color: #c9d1d9 !important;
     }
 
-    .stFileUploader {display:none !important;}
-
-    .footer {
-        text-align:center;
-        color:#8b949e;
-        font-size:0.85em;
-        margin-top: 80px;
-        padding-bottom:160px;
+    /* Chat bubbles - user and assistant */
+    .stChatMessage.user {
+        background-color: #f85149 !important;
+        border-radius: 12px !important;
+        color: white !important;
+    }
+    .stChatMessage.assistant {
+        background-color: #f0ad4e !important;
+        border-radius: 12px !important;
+        color: black !important;
     }
 
-    /* Blinking cursor on assistant messages */
-    .stChatMessage assistant::after {
-        content:"";
-        animation: blink 1s step-end infinite;
+    /* Footer styling */
+    footer {
+        visibility: hidden;
+        height: 40px;
     }
-    @keyframes blink { 50% {opacity:0;} }
+    .footer-text {
+        text-align: center;
+        color: #8b949e;
+        font-size: 0.85em;
+        padding: 20px 0;
+    }
 </style>
-"""
-st.markdown(CSS, unsafe_allow_html=True)
+""", unsafe_allow_html=True)
 
-# =============================
-# SESSION STATE
-# =============================
-st.session_state.setdefault("messages", [])
-st.session_state.setdefault("pending_ocr_text", None)
-st.session_state.setdefault("last_uploaded", None)
-st.session_state.setdefault("mode", "Home")
-st.session_state.setdefault("show_uploader", False)
+# Initialize session state
+if "mode" not in st.session_state:
+    st.session_state.mode = "Home"
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+if "pending_ocr_text" not in st.session_state:
+    st.session_state.pending_ocr_text = None
+if "uploaded_file_name" not in st.session_state:
+    st.session_state.uploaded_file_name = None
 
-# =============================
-# SIDEBAR
-# =============================
+# Sidebar navigation
 with st.sidebar:
     st.title("Spartan AI Demo")
-
     if st.button("Home"):
-        st.session_state.update(
-            messages=[],
-            pending_ocr_text=None,
-            mode="Home",
-            show_uploader=False
-        )
-        st.rerun()
+        st.session_state.mode = "Home"
+        st.session_state.messages = []
+        st.session_state.pending_ocr_text = None
 
-    st.subheader("Tools")
-    for label in MODEL_MAP.keys():
-        if st.button(label):
-            st.session_state.update(
-                mode=label,
-                messages=[{"role": "assistant", "content": "Hello! How can I help you today?"}],
-                pending_ocr_text=None,
-                show_uploader=False
-            )
-            st.rerun()
+    st.markdown("**Tools**")
+    for tool in MODEL_MAP.keys():
+        if st.button(tool):
+            st.session_state.mode = tool
+            # Reset messages to greeting for the new tool
+            st.session_state.messages = [{
+                "role": "assistant",
+                "content": "Hello! How can I help you today?"
+            }]
+            st.session_state.pending_ocr_text = None
 
     st.markdown("---")
     st.caption("Senior Project by Dallin Geurts")
 
-# =============================
-# HOME PAGE
-# =============================
+# Home page
 if st.session_state.mode == "Home":
     st.title("Spartan AI Demo")
     st.markdown("### Empowering Education with Responsible AI")
     st.markdown("Spartan AI helps teachers and students with ethical, powerful tools.")
-    st.markdown("<div class='footer'>Spartan AI • Senior Project • Dallin Geurts • 2025</div>",
-                unsafe_allow_html=True)
+    st.markdown('<div class="footer-text">Spartan AI • Senior Project • Dallin Geurts • 2025</div>', unsafe_allow_html=True)
     st.stop()
 
-# =============================
-# TOOL PAGE
-# =============================
-current_model = MODEL_MAP[st.session_state.mode]
-st.title(st.session_state.mode)
+# Current AI tool
+current_tool = st.session_state.mode
+model = MODEL_MAP[current_tool]
+
+st.title(current_tool)
+
+# File uploader (always visible)
+uploaded_file = st.file_uploader("Upload an image for OCR (optional)", type=["png", "jpg", "jpeg"])
+
+# Process OCR if new file uploaded
+if uploaded_file and uploaded_file.name != st.session_state.uploaded_file_name:
+    try:
+        img = Image.open(uploaded_file).convert("RGB")
+        ocr_text = pytesseract.image_to_string(img, config=OCR_CONFIG).strip()
+        if not ocr_text:
+            ocr_text = "(No text found in image)"
+        st.session_state.pending_ocr_text = ocr_text
+        st.session_state.uploaded_file_name = uploaded_file.name
+        st.success("Image processed! OCR text will be included in your next query.")
+    except Exception as e:
+        st.error(f"Error processing image: {e}")
+        st.session_state.pending_ocr_text = None
+        st.session_state.uploaded_file_name = None
 
 # Display chat history
 for msg in st.session_state.messages:
-    with st.chat_message(msg["role"]):
-        st.markdown(msg.get("display_text", msg["content"]))
+    role = msg["role"]
+    content = msg.get("display_text", msg["content"])
+    with st.chat_message(role):
+        st.markdown(content)
 
-# =============================
-# FIXED BOTTOM BAR
-# =============================
-st.markdown("<div class='bottom-bar'>", unsafe_allow_html=True)
+# User input
+user_input = st.chat_input("Type your message here...")
 
-col1, col2 = st.columns([2, 8])
-
-with col1:
-    if st.button("Upload image", key="upload_trigger"):
-        st.session_state.show_uploader = True
-
-with col2:
-    prompt = st.chat_input("Type your message...")
-
-st.markdown("</div>", unsafe_allow_html=True)
-
-# =============================
-# FILE UPLOADER LOGIC
-# =============================
-uploaded_file = None
-if st.session_state.show_uploader:
-    uploaded_file = st.file_uploader(
-        "Select image", type=["png", "jpg", "jpeg"],
-        key="image_uploader",
-        label_visibility="collapsed"
-    )
-
-# =============================
-# OCR PROCESSING
-# =============================
-if uploaded_file and st.session_state.last_uploaded != uploaded_file.name:
-    with st.spinner("Processing image..."):
-        try:
-            img = Image.open(uploaded_file).convert("RGB")
-            ocr = pytesseract.image_to_string(img, config=OCR_CONFIG).strip() or "(No text found)"
-            st.session_state.pending_ocr_text = ocr
-            st.session_state.last_uploaded = uploaded_file.name
-            st.session_state.show_uploader = False
-
-            st.success("Image processed!")
-            st.rerun()
-
-        except Exception as e:
-            st.error(f"OCR error: {e}")
-            st.session_state.pending_ocr_text = None
-            st.session_state.show_uploader = False
-
-# =============================
-# MESSAGE SEND
-# =============================
-if prompt:
-    # Attach OCR text if available
+if user_input:
+    # Compose user message content, including OCR text if available
     if st.session_state.pending_ocr_text:
-        full_content = (
-            f"uploaded-image-text{{{st.session_state.pending_ocr_text}}}\n"
-            f"user-query{{{prompt}}}"
-        )
+        content = f"uploaded-image-text{{{st.session_state.pending_ocr_text}}}\nuser-query{{{user_input}}}"
         st.session_state.pending_ocr_text = None
     else:
-        full_content = f"user-query{{{prompt}}}"
+        content = f"user-query{{{user_input}}}"
 
-    # Record user message
+    # Append user message
     st.session_state.messages.append({
         "role": "user",
-        "content": full_content,
-        "display_text": prompt
+        "content": content,
+        "display_text": user_input
     })
 
-    # Display user message
+    # Show user message immediately
     with st.chat_message("user"):
-        st.markdown(prompt)
+        st.markdown(user_input)
 
-    # Stream response
+    # Send to AI backend and stream response
     with st.chat_message("assistant"):
         placeholder = st.empty()
-        full_reply = ""
+        full_response = ""
 
         payload = {
-            "model": current_model,
+            "model": model,
             "messages": [{"role": m["role"], "content": m["content"]} for m in st.session_state.messages],
             "stream": True
         }
 
         try:
             with requests.post(
-                OLLAMA_CHAT_URL, json=payload,
+                OLLAMA_CHAT_URL,
+                json=payload,
                 auth=HTTPBasicAuth(USERNAME, PASSWORD),
-                timeout=600, verify=False, stream=True
-            ) as r:
-                r.raise_for_status()
-                for line in r.iter_lines():
+                timeout=600,
+                verify=False,
+                stream=True,
+            ) as response:
+                response.raise_for_status()
+                for line in response.iter_lines():
                     if not line:
                         continue
                     token = json.loads(line).get("message", {}).get("content", "")
-                    full_reply += token
-                    placeholder.markdown(full_reply + " ")
+                    full_response += token
+                    placeholder.markdown(full_response + " ")
                     time.sleep(0.01)
-            placeholder.markdown(full_reply)
-
+            placeholder.markdown(full_response)
         except Exception as e:
-            placeholder.markdown(f"Connection error: {e}")
+            placeholder.markdown(f"Error connecting to AI backend: {e}")
 
+        # Append assistant message
         st.session_state.messages.append({
             "role": "assistant",
-            "content": full_reply,
-            "display_text": full_reply
+            "content": full_response,
+            "display_text": full_response
         })
 
-# =============================
-# FOOTER
-# =============================
-st.markdown("<div class='footer'>Spartan AI • Senior Project • Dallin Geurts</div>",
-            unsafe_allow_html=True)
+# Footer
+st.markdown('<div class="footer-text">Spartan AI • Senior Project • Dallin Geurts</div>', unsafe_allow_html=True)
