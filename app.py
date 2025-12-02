@@ -25,7 +25,7 @@ except ImportError:
 NGROK_URL = "https://ona-overcritical-extrinsically.ngrok-free.dev"
 MODEL_MAP = {
     "Assignment Generation": "gemma3",
-    "Assignment Grader": "spartan-grader",
+    "Assignment Grader": "phi3:mini",
     "AI Content/Plagiarism Detector": "spartan-detector",
     "Student Chatbot": "spartan-student",
 }
