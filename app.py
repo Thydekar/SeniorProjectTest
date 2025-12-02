@@ -1,4 +1,4 @@
-# app.py — Spartan AI Demo — FINAL & PERFECT (image only once, forever)
+# app.py — Spartan AI Demo — FINAL & FLAWLESS (No errors, image only once)
 import streamlit as st
 import requests
 from requests.auth import HTTPBasicAuth
@@ -44,7 +44,7 @@ with st.sidebar:
     st.title("Spartan AI Demo")
     if st.button("Home", key="home"):
         for k in ["mode","messages","pending_image","last_mode"]:
-            st.session_state.pop(k,None)
+            st.session_state.pop(k, None)
         st.rerun()
 
     st.markdown("**Tools**")
@@ -84,34 +84,39 @@ if mode == "Home":
 current_model = model_map[mode]
 st.title(f"{mode}")
 
-# IMAGE UPLOADER (top)
+# IMAGE UPLOADER
 uploaded_file = st.file_uploader("Attach image (handwriting, screenshot, etc.)", type=["png","jpg","jpeg"])
 
-# Process new image
 if uploaded_file:
     if st.session_state.get("pending_image",{}).get("name") != uploaded_file.name:
         with st.spinner("Reading image text..."):
-            img = Image.open(uploaded_file).convert("RGB")
-            big = img.resize((img.width*3, img.height*3), Image.LANCZOS)
-            ocr = pytesseract.image_to_string(big, config=OCR_CONFIG).strip()
+            try:
+                img = Image.open(uploaded_file).convert("RGB")
+                big = img.resize((img.width*3, img.height*3), Image.LANCZOS)
+                ocr = pytesseract.image_to_string(big, config=OCR_CONFIG).strip()
 
-            thumb = img.copy()
-            thumb.thumbnail((300,300))
-            buf = io.BytesIO()
-            thumb.save(buf, format="PNG")
-            img_bytes = buf.getvalue()
+                thumb = img.copy()
+                thumb.thumbnail((300,300))
+                buf = io.BytesIO()
+                thumb.save(buf, format="PNG")
+                img_bytes = buf.getvalue()
 
-            st.session_state.pending_image = {"name":uploaded_file.name, "thumb":img_bytes, "ocr":ocr}
-            st.success("Image uploaded — ready to send with your question")
+                st.session_state.pending_image = {"name":uploaded_file.name, "thumb":img_bytes, "ocr":ocr}
+                st.success("Image uploaded — ready to send with your question")
+            except:
+                st.error("Could not process image.")
+                st.session_state.pending_image = None
 
-# Initialize chat
+# Initialize chat with safe default
 if "messages" not in st.session_state:
     st.session_state.messages = [{"role":"assistant","content":"Hello! How can I help you today?"}]
 
-# DISPLAY ALL MESSAGES CORRECTLY
+# DISPLAY CHAT HISTORY — SAFE FALLBACK
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
-        st.markdown(msg["display_text"])
+        # Safely get display text
+        display_text = msg.get("display_text", msg.get("content", ""))
+        st.markdown(display_text)
         if msg.get("image"):
             st.image(msg["image"], width=300)
 
@@ -119,44 +124,45 @@ for msg in st.session_state.messages:
 prompt = st.chat_input("Type your question...")
 
 if prompt:
-    # Prepare what Ollama sees
+    # Build clean payload for Ollama
     ollama_messages = []
     for m in st.session_state.messages:
-        ollama_messages.append({"role": m["role"], "content": m["ai_content"]})
+        ollama_messages.append({"role": m["role"], "content": m.get("ai_content", m.get("content", ""))})
 
-    # Build new user message
+    # Build new message
     ai_text = ""
     display_text = prompt
-    image_to_show = None
+    image_data = None
 
     if st.session_state.get("pending_image"):
         ocr = st.session_state.pending_image["ocr"]
         if ocr:
             ai_text += f"uploaded-image-text{{{ocr}}}\n"
-        image_to_show = st.session_state.pending_image["thumb"]
-        st.session_state.pending_image = None  # consume it
+        image_data = st.session_state.pending_image["thumb"]
+        st.session_state.pending_image = None
 
     ai_text += f"user-query{{{prompt}}}"
 
-    # Save message with separate fields
-    new_msg = {
+    # Create new message object
+    new_user_msg = {
         "role": "user",
-        "ai_content": ai_text,        # what Ollama sees
-        "display_text": prompt,       # what user sees
-        "image": image_to_show        # None or bytes
+        "ai_content": ai_text,
+        "content": ai_text,          # fallback for older messages
+        "display_text": prompt,
+        "image": image_data
     }
-    st.session_state.messages.append(new_msg)
+    st.session_state.messages.append(new_user_msg)
 
-    # Show the message immediately (correctly)
+    # Show user message
     with st.chat_message("user"):
         st.markdown(prompt)
-        if image_to_show:
-            st.image(image_to_show, width=300)
+        if image_data:
+            st.image(image_data, width=300)
 
     # Call Ollama
     with st.chat_message("assistant"):
         placeholder = st.empty()
-        full_response = ""
+        full = ""
         try:
             payload = {"model": current_model, "messages": ollama_messages + [{"role":"user","content":ai_text}], "stream":True}
             with requests.post(OLLAMA_CHAT_URL, json=payload,
@@ -166,22 +172,22 @@ if prompt:
                 for line in r.iter_lines():
                     if line:
                         try:
-                            token = json.loads(line).get("message", {}).get("content", "")
-                            full_response += token
-                            placeholder.markdown(full_response + "▎")
+                            token = json.loads(line).get("message",{}).get("content","")
+                            full += token
+                            placeholder.markdown(full + "cursor")
                             time.sleep(0.008)
-                        except:
-                            continue
-                placeholder.markdown(full_response)
+                        except: continue
+                placeholder.markdown(full)
         except Exception as e:
-            placeholder.error("Connection lost — please try again.")
-            full_response = "Sorry, I couldn't connect right now."
+            placeholder.error("Connection issue — please try again.")
+            full = "Sorry, I'm having trouble connecting."
 
-        # Save assistant message
+        # Save assistant response
         st.session_state.messages.append({
             "role": "assistant",
-            "ai_content": full_response,
-            "display_text": full_response,
+            "ai_content": full,
+            "content": full,
+            "display_text": full,
             "image": None
         })
 
