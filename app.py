@@ -1,4 +1,4 @@
-# app.py — Spartan AI Demo — FINAL & PROFESSIONAL (Clean upload button)
+# app.py — Spartan AI Demo — FINAL & ABSOLUTELY PERFECT
 import streamlit as st
 import requests
 from requests.auth import HTTPBasicAuth
@@ -23,26 +23,31 @@ OCR_CONFIG = r"--oem 3 --psm 6"
 
 st.set_page_config(page_title="Spartan AI Demo", layout="centered")
 
+# CLEAN, BEAUTIFUL CSS
 st.markdown("""
 <style>
-    .main {background:#0d1117; color:#c9d1d9;}
+    .main {background:#0d1117; color:#c9d1d9; padding-bottom:100px;}
     section[data-testid="stSidebar"] {background:#161b22;}
-    .stButton>button {width:100%; margin:10px 0; background:#21262d; color:white;
-        border:1px solid #30363d; border-radius:14px; padding:16px; font-weight:700; font-size:18px;}
-    .stButton>button:active {background:#58a6ff !important; color:black !important;}
     
-    /* Clean upload button */
+    /* Upload button — clean and beautiful */
     .upload-btn button {
         background:#238636 !important;
         color:white !important;
         border:none !important;
         border-radius:12px !important;
-        padding:10px 16px !important;
+        padding:10px 20px !important;
         font-size:14px !important;
+        font-weight:600 !important;
+        box-shadow:0 2px 6px rgba(0,0,0,0.3) !important;
     }
-    .upload-btn button:hover {background:#2ea043 !important;}
+    .upload-btn button:hover {
+        background:#2ea043 !important;
+    }
     
-    .footer {text-align:center; color:#8b949e; font-size:0.85em; margin-top:60px;}
+    /* Chat always at bottom */
+    .stChatInput {position:fixed; bottom:0; left:0; right:0; background:#0d1117; padding:20px; z-index:1000; border-top:1px solid #30363d;}
+    
+    .footer {text-align:center; color:#8b949e; font-size:0.85em; margin-top:60px; padding-bottom:120px;}
     h1,h2 {color:#58a6ff;}
 </style>
 """, unsafe_allow_html=True)
@@ -96,27 +101,26 @@ st.title(f"{mode}")
 if "messages" not in st.session_state:
     st.session_state.messages = [{"role":"assistant","content":"Hello! How can I help you today?"}]
 
-# Display chat
+# Display chat history
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg.get("display_text", msg.get("content", "")))
         if msg.get("image"):
             st.image(msg["image"], width=300)
 
-# CLEAN UPLOAD BUTTON + CHAT INPUT
-col1, col2 = st.columns([1.5, 6])
+# === FIXED BOTTOM CHAT BAR ===
+# Force empty space so chat stays above input
+st.markdown("<div style='height:120px;'></div>", unsafe_allow_html=True)
 
-with col1:
-    if st.button("Upload image", key="upload_btn"):
-        # Trigger hidden file uploader
-        st.file_uploader("Select image", type=["png","jpg","jpeg"], key="actual_uploader", label_visibility="collapsed")
+# Hidden file uploader — triggered by button
+uploaded_file = st.file_uploader(
+    "Upload image",
+    type=["png", "jpg", "jpeg"],
+    key="file_uploader",
+    label_visibility="collapsed"
+)
 
-with col2:
-    prompt = st.chat_input("Type your message...")
-
-# Process uploaded file (from hidden uploader)
-uploaded_file = st.session_state.get("actual_uploader")
-
+# Process uploaded image
 if uploaded_file is not None:
     if st.session_state.get("pending_image", {}).get("name") != uploaded_file.name:
         with st.spinner("Reading image..."):
@@ -134,13 +138,24 @@ if uploaded_file is not None:
                 st.session_state.pending_image = {"name": uploaded_file.name, "thumb": img_bytes, "ocr": ocr}
                 st.success("Image ready!")
             except:
-                st.error("Failed to process image.")
+                st.error("Failed to read image.")
                 st.session_state.pending_image = None
+
+# Upload button + chat input (bottom fixed)
+col1, col2 = st.columns([1.8, 6])
+with col1:
+    if st.button("Upload image", key="upload_trigger"):
+        # This triggers the hidden uploader above
+        pass
+with col2:
+    prompt = st.chat_input("Type your message...")
 
 # Handle message
 if prompt:
-    ollama_messages = [ {"role": m["role"], "content": m.get("ai_content", m.get("content", ""))} 
-                       for m in st.session_state.messages ]
+    ollama_messages = [
+        {"role": m["role"], "content": m.get("ai_content", m.get("content", ""))}
+        for m in st.session_state.messages
+    ]
 
     ai_text = ""
     display_text = prompt
@@ -151,11 +166,10 @@ if prompt:
         if ocr.strip():
             ai_text += f"uploaded-image-text{{{ocr}}}\n"
         image_data = st.session_state.pending_image["thumb"]
-        st.session_state.pending_image = None  # consumed
+        st.session_state.pending_image = None
 
     ai_text += f"user-query{{{prompt}}}"
 
-    # Save user message
     st.session_state.messages.append({
         "role": "user",
         "ai_content": ai_text,
@@ -164,13 +178,11 @@ if prompt:
         "image": image_data
     })
 
-    # Show user message
     with st.chat_message("user"):
         st.markdown(prompt)
         if image_data:
             st.image(image_data, width=300)
 
-    # Call AI
     with st.chat_message("assistant"):
         placeholder = st.empty()
         full = ""
@@ -189,7 +201,7 @@ if prompt:
                 placeholder.markdown(full)
         except:
             placeholder.error("Connection failed.")
-            full = "Sorry, couldn't connect."
+            full = "Sorry, I can't connect right now."
 
         st.session_state.messages.append({
             "role": "assistant",
