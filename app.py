@@ -1,4 +1,4 @@
-# app.py — Spartan AI Demo — Final Version (All Requests Implemented)
+# app.py — Spartan AI Demo — FINAL VERSION (Perfect OCR + No Image Preview)
 import streamlit as st
 import requests
 from requests.auth import HTTPBasicAuth
@@ -21,31 +21,29 @@ OLLAMA_CHAT_URL = f"{NGROK_URL}/api/chat"
 USERNAME = "dgeurts"
 PASSWORD = "thaidakar21"
 
+# Ultra-robust OCR config
+pytesseract.pytesseract.tesseract_cmd = '/usr/bin/tesseract'
+OCR_CONFIG = '--oem 3 --psm 6 -c tessedit_char_whitelist=ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789.,!?;:\'"()[]{}<>-_+=*/\\&%$#@!~`^| '
+
 st.set_page_config(page_title="Spartan AI Demo", layout="centered")
 
-# Clean theme + large bold sidebar buttons
 st.markdown("""
 <style>
     .main {background: #0d1117; color: #c9d1d9;}
     .stApp {background: #0d1117;}
     section[data-testid="stSidebar"] {background: #161b22; border-right: 1px solid #30363d;}
     
-    /* Large, bold sidebar buttons */
     .stButton > button {
         width: 100%; margin: 10px 0; background: #21262d; color: white;
         border: 1px solid #30363d; border-radius: 14px; padding: 16px;
         font-weight: 700 !important; font-size: 18px !important;
-        transition: all 0.2s;
     }
-    .stButton > button:hover {background: #21262d; border-color: #30363d;}
-    .stButton > button:active,
-    .stButton > button[data-active="true"] {
-        background: #58a6ff !important; color: black !important; border-color: #58a6ff;
-    }
+    .stButton > button:hover {background: #21262d;}
+    .stButton > button:active {background: #58a6ff !important; color: black !important;}
     
     .stTextInput > div > div > input {background: #21262d; color: white; border: 1px solid #30363d; border-radius: 16px;}
     .footer {text-align: center; color: #8b949e; font-size: 0.85em; margin-top: 60px; padding: 20px;}
-    .uploaded-img {border-radius: 8px; margin: 10px 0;}
+    .uploaded-img {border-radius: 8px; margin-top: 8px;}
     h1, h2 {color: #58a6ff;}
 </style>
 """, unsafe_allow_html=True)
@@ -111,34 +109,36 @@ if mode == "Home":
 current_model = model_map[mode]
 st.title(f"{mode}")
 
-# Persistent image upload at top
+# File uploader (top)
 uploaded_file = st.file_uploader("Attach image (handwriting, screenshot, etc.)", type=["png", "jpg", "jpeg"])
 
-# Store pending image
-if uploaded_file is not None and st.session_state.get("pending_image") != uploaded_file.name:
-    image = Image.open(uploaded_file)
-    # Resize for thumbnail
-    image.thumbnail((300, 300))
-    buffered = io.BytesIO()
-    image.save(buffered, format="PNG")
-    img_str = buffered.getvalue()
-    
-    st.session_state.pending_image = {
-        "name": uploaded_file.name,
-        "data": img_str,
-        "text": pytesseract.image_to_string(image)
-    }
-    st.success("Image uploaded — ready to send with your question")
+# Store image when uploaded
+if uploaded_file and (st.session_state.get("pending_image") is None or st.session_state.pending_image["name"] != uploaded_file.name):
+    with st.spinner("Processing image for maximum OCR accuracy..."):
+        image = Image.open(uploaded_file).convert("RGB")
+        # Enhance image for best OCR
+        enhanced = image.resize((image.width * 3, image.height * 3), Image.LANCZOS)
+        ocr_text = pytesseract.image_to_string(enhanced, config=OCR_CONFIG)
+        
+        # Create small thumbnail
+        thumbnail = image.copy()
+        thumbnail.thumbnail((300, 300))
+        buffered = io.BytesIO()
+        thumbnail.save(buffered, format="PNG")
+        img_data = buffered.getvalue()
 
-# Show pending image thumbnail (small)
-if st.session_state.get("pending_image"):
-    st.image(st.session_state.pending_image["data"], width=200, caption="Image ready to send")
+        st.session_state.pending_image = {
+            "name": uploaded_file.name,
+            "data": img_data,
+            "text": ocr_text.strip()
+        }
+        st.success("Image uploaded — ready to send with your question")
 
 # Initialize chat
 if "messages" not in st.session_state:
     st.session_state.messages = [{"role": "assistant", "content": "Hello! How can I help you today?"}]
 
-# Display history
+# Display chat history
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
@@ -147,21 +147,19 @@ for msg in st.session_state.messages:
 prompt = st.chat_input("Type your question...")
 
 if prompt:
-    # Build internal message for AI
     internal_message = ""
-    user_display_message = prompt
+    user_display = prompt
 
-    # Add image text if pending
+    # Handle pending image
     if st.session_state.get("pending_image"):
-        ocr_text = st.session_state.pending_image["text"].strip()
+        ocr_text = st.session_state.pending_image["text"]
         if ocr_text:
             internal_message += f"uploaded-image-text{{{ocr_text}}}"
-        # Show small image in user message
+        # Show user message with image
         with st.chat_message("user"):
             st.markdown(prompt)
-            st.image(st.session_state.pending_image["data"], width=200)
-        # Clear pending image after sending
-        st.session_state.pending_image = None
+            st.image(st.session_state.pending_image["data"], width=300)
+        st.session_state.pending_image = None  # Clear after send
     else:
         with st.chat_message("user"):
             st.markdown(prompt)
@@ -172,7 +170,6 @@ if prompt:
     else:
         internal_message = f"user-query{{{prompt}}}"
 
-    # Append to history (internal version for AI)
     st.session_state.messages.append({"role": "user", "content": internal_message})
 
     # AI Response
