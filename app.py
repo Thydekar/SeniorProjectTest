@@ -171,4 +171,5 @@ if prompt or ocr_text:
 
         st.session_state.messages.append({"role": "assistant", "content": full})
 
- st.markdown("<div class='footer'>Spartan AI • Senior Project • Dallin Geurts</div>", unsafe_allow_html=True)
+# Footer — now properly indented
+st.markdown("<div class='footer'>Spartan AI • Senior Project • Dallin Geurts</div>", unsafe_allow_html=True)
