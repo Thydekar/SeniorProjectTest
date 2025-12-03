@@ -1,4 +1,4 @@
-# app.py - Spartan AI Demo - FINAL with "New Chat" button at bottom next to chat bar
+# app.py - Spartan AI Demo - FINAL with "New Chat" at bottom (perfectly aligned) + blinking cursor
 import streamlit as st
 import requests
 from requests.auth import HTTPBasicAuth
@@ -35,7 +35,7 @@ OCR_CONFIG = r"--oem 3 --psm 6"
 
 st.set_page_config(page_title="Spartan AI Demo", layout="wide")
 
-# CSS + Bottom "New Chat" button + animations
+# CSS + Bottom bar with New Chat button
 st.markdown("""
 <style>
     body, .css-18e3th9 {background-color: #0d1117 !important; color: #c9d1d9 !important;}
@@ -48,19 +48,23 @@ st.markdown("""
     footer {visibility: hidden; height: 40px;}
     .footer-text {text-align: center; color: #8b949e; font-size: 0.85em; padding: 20px 0;}
 
-    /* Bottom bar container */
+    /* Bottom fixed bar - perfectly aligned */
     .bottom-bar {
         position: fixed;
         bottom: 0;
-        left: 0;
-        right: 0;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 90%;
+        max-width: 900px;
         background: #0d1117;
         border-top: 1px solid #30363d;
-        padding: 12px 20px;
+        padding: 16px 20px;
         display: flex;
         align-items: center;
         gap: 12px;
         z-index: 9999;
+        border-radius: 16px 16px 0 0;
+        box-shadow: 0 -4px 20px rgba(0,0,0,0.3);
     }
 
     /* New Chat button - bottom left */
@@ -68,10 +72,10 @@ st.markdown("""
         background: #238636 !important;
         color: white !important;
         border: none !important;
-        border-radius: 8px !important;
-        padding: 10px 20px !important;
+        border-radius: 12px !important;
+        padding: 12px 20px !important;
         font-weight: 600 !important;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+        white-space: nowrap;
     }
     .new-chat-btn button:hover {
         background: #2ea043 !important;
@@ -137,11 +141,36 @@ for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg.get("display_text", msg["content"]))
 
-# File uploader
-uploaded_file = st.file_uploader(
-    "Upload a file (PDF, DOCX, TXT, images, etc.) — text will be extracted automatically",
-    type=["pdf","docx","txt","png","jpg","jpeg","gif","bmp","tiff"]
-)
+# Add bottom padding so content isn't hidden behind fixed bar
+st.markdown("<div style='height: 120px;'></div>", unsafe_allow_html=True)
+
+# === BOTTOM FIXED BAR: New Chat + File Upload + Chat Input ===
+if st.session_state.mode != "Home":
+    st.markdown("<div class='bottom-bar'>", unsafe_allow_html=True)
+    
+    col1, col2, col3 = st.columns([2.2, 1.8, 6])
+    
+    with col1:
+        if st.button("New Chat", key="new_chat_bottom"):
+            st.session_state.messages = [{"role":"assistant","content":"Hello! How can I help you today?"}]
+            st.session_state.pending_ocr_text = None
+            st.session_state.uploaded_file_name = None
+            st.rerun()
+    
+    with col2:
+        uploaded_file = st.file_uploader(
+            "Upload file",
+            type=["pdf","docx","txt","png","jpg","jpeg","gif","bmp","tiff"],
+            label_visibility="collapsed"
+        )
+    
+    with col3:
+        user_input = st.chat_input("Type your message here...")
+    
+    st.markdown("</div>", unsafe_allow_html=True)
+else:
+    uploaded_file = None
+    user_input = None
 
 # Extract text (same as before)
 if uploaded_file and uploaded_file.name != st.session_state.uploaded_file_name:
@@ -173,23 +202,6 @@ if uploaded_file and uploaded_file.name != st.session_state.uploaded_file_name:
             st.error(f"Error reading file: {e}")
             st.session_state.pending_ocr_text = None
 
-# === BOTTOM BAR WITH NEW CHAT BUTTON + CHAT INPUT ===
-st.markdown("<div class='bottom-bar'>", unsafe_allow_html=True)
-
-col1, col2 = st.columns([1, 4])
-
-with col1:
-    if st.button("New Chat", key="new_chat_bottom"):
-        st.session_state.messages = [{"role": "assistant", "content": "Hello! How can I help you today?"}]
-        st.session_state.pending_ocr_text = None
-        st.session_state.uploaded_file_name = None
-        st.rerun()
-
-with col2:
-    user_input = st.chat_input("Type your message here...")
-
-st.markdown("</div>", unsafe_allow_html=True)
-
 # User input handling
 if user_input:
     if st.session_state.pending_ocr_text:
@@ -202,7 +214,7 @@ if user_input:
     with st.chat_message("user"):
         st.markdown(user_input)
 
-    # AI RESPONSE — PERFECT: Thinking → typing with blinking cursor
+    # AI RESPONSE — PERFECT: Thinking → disappears → typing with blinking cursor
     with st.chat_message("assistant"):
         thinking_placeholder = st.empty()
         thinking_placeholder.markdown(
