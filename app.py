@@ -1,4 +1,4 @@
-# app.py - Spartan AI Student Chatbot (Minimal & Perfect)
+# app.py - Spartan AI Student Chatbot (Minimal Final Version)
 import streamlit as st
 import requests
 from requests.auth import HTTPBasicAuth
@@ -6,9 +6,8 @@ import json
 import time
 import pytesseract
 from PIL import Image
-import io
 
-# Graceful imports for file support
+# Graceful imports for PDFs/DOCX
 try:
     import PyPDF2
 except ImportError:
@@ -18,135 +17,134 @@ try:
 except ImportError:
     docx = None
 
-# === CONFIG ===
-NGROK_URL = "https://ona-overcritical-extrinsically.ngrok-free.dev"  # ← change if needed
-MODEL = "spartan-student"                                            # only this model
+# Config — ONLY Student Model
+NGROK_URL = "https://ona-overcritical-extrinsically.ngrok-free.dev"
+MODEL = "spartan-student"
 OLLAMA_CHAT_URL = f"{NGROK_URL}/api/chat"
 USERNAME = "dgeurts"
 PASSWORD = "thaidakar21"
 OCR_CONFIG = r"--oem 3 --psm 6"
 
-st.set_page_config(page_title="Spartan AI • Student Chat", layout="centered")
+st.set_page_config(page_title="Spartan AI - Student Chatbot", layout="wide")
 
-# === STYLING ===
+# Beautiful CSS (kept exactly as you love it)
 st.markdown("""
 <style>
-    .main {background:#0d1117; color:#c9d1d9;}
-    h1 {color:#58a6ff; text-align:center;}
-    .stChatMessage.user {background:#f85149 !important; color:white !important;}
-    .stChatMessage.assistant {background:#f0ad4e !important; color:black !important;}
-    
-    .bottom-bar {
-        position:fixed; bottom:0; left:50%; transform:translateX(-50%);
-        width:90%; max-width:900px; background:#0d1117;
-        border-top:1px solid #30363d; padding:16px 20px;
-        display:flex; align-items:center; gap:12px; z-index:9999;
-        border-radius:16px 16px 0 0; box-shadow:0 -4px 20px rgba(0,0,0,0.3);
+    body, .css-18e3th9 {background-color: #0d1117 !important; color: #c9d1d9 !important;}
+    section[data-testid="stSidebar"] {background-color: #161b22 !important;}
+    h1, h2, h3 {color: #58a6ff !important;}
+    .stFileUploader > div {background: #161b22 !important; border: 1px solid #30363d !important; border-radius: 8px !important;}
+    .stChatMessage.user {background-color: #f85149 !important; border-radius: 12px !important; color: white !important;}
+    .stChatMessage.assistant {background-color: #f0ad4e !important; border-radius: 12px !important; color: black !important;}
+    footer {visibility: hidden;}
+    .footer-text {text-align: center; color: #8b949e; font-size: 0.85em; padding: 20px 0;}
+
+    /* New Chat button — top left, exactly as before */
+    .new-chat-btn {
+        position: fixed;
+        top: 20px;
+        left: 20px;
+        z-index: 9999;
+        background: #238636 !important;
+        color: white !important;
+        border: none !important;
+        border-radius: 8px !important;
+        padding: 10px 16px !important;
+        font-weight: 600 !important;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.4);
     }
-    .new-chat-btn button {
-        background:#238636 !important; color:white !important;
-        border:none !important; border-radius:12px !important;
-        padding:12px 20px !important; font-weight:600 !important;
-    }
-    .new-chat-btn button:hover {background:#2ea043 !important;}
-    
-    .thinking {font-size:1.2em; font-weight:bold; color:#58a6ff;}
+    .new-chat-btn:hover {background: #2ea043 !important;}
+
+    /* Thinking animation */
+    .thinking {display: inline-block; font-size: 1.2em; font-weight: bold; color: #58a6ff;}
     .dot {animation: blink 1.4s infinite both;}
-    .dot:nth-child(1){animation-delay:0s;}
-    .dot:nth-child(2){animation-delay:0.2s;}
-    .dot:nth-child(3){animation-delay:0.4s;}
-    @keyframes blink {0%,80%,100%{opacity:0.3;} 20%{opacity:1;}}
+    .dot:nth-child(1) {animation-delay: 0s;}
+    .dot:nth-child(2) {animation-delay: 0.2s;}
+    .dot:nth-child(3) {animation-delay: 0.4s;}
+    @keyframes blink {0%, 80%, 100% {opacity: 0.3;} 20% {opacity: 1;}}
 </style>
 """, unsafe_allow_html=True)
 
-# === SESSION STATE ===
+# Session state
 if "messages" not in st.session_state:
-    st.session_state.messages = [{"role": "assistant", "content": "Hello! I'm your Spartan AI assistant. How can I help you today?"}]
-if "pending_text" not in st.session_state:
-    st.session_state.pending_text = None
-if "last_file" not in st.session_state:
-    st.session_state.last_file = None
+    st.session_state.messages = [{"role": "assistant", "content": "Hello! I'm your Spartan AI study buddy. How can I help you today?"}]
+if "pending_ocr_text" not in st.session_state:
+    st.session_state.pending_ocr_text = None
+if "uploaded_file_name" not in st.session_state:
+    st.session_state.uploaded_file_name = None
 
-# === HEADER ===
-st.markdown("<h1>Spartan AI • Student Chatbot</h1>", unsafe_allow_html=True)
-st.markdown("<p style='text-align:center; color:#8b949e;'>Ask anything • Upload files • Private & local AI</p>", unsafe_allow_html=True)
-st.markdown("---")
+# === NEW CHAT BUTTON (top-left, unchanged) ===
+if st.button("New Chat", key="new_chat_btn"):
+    st.session_state.messages = [{"role": "assistant", "content": "Hello! I'm your Spartan AI study buddy. How can I help you today?"}]
+    st.session_state.pending_ocr_text = None
+    st.session_state.uploaded_file_name = None
+    st.rerun()
 
-# === CHAT HISTORY ===
+# Title
+st.title("Spartan AI — Student Chatbot")
+
+# Chat history
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg.get("display_text", msg["content"]))
 
-# Padding so content isn’t hidden under bottom bar
-st.markdown("<div style='height:130px;'></div>", unsafe_allow_html=True)
+# File uploader
+uploaded_file = st.file_uploader(
+    "Upload a file (PDF, DOCX, TXT, image, etc.) — I’ll read it for you!",
+    type=["pdf","docx","txt","png","jpg","jpeg","gif","bmp","tiff"]
+)
 
-# === BOTTOM BAR ===
-st.markdown("<div class='bottom-bar'>", unsafe_allow_html=True)
-col1, col2, col3 = st.columns([2, 2, 6])
-
-with col1:
-    if st.button("New Chat", key="new_chat"):
-        st.session_state.messages = [{"role": "assistant", "content": "Hello! I'm your Spartan AI assistant. How can I help you today?"}]
-        st.session_state.pending_text = None
-        st.session_state.last_file = None
-        st.rerun()
-
-with col2:
-    uploaded = st.file_uploader("Upload", type=["pdf","docx","txt","png","jpg","jpeg"], label_visibility="collapsed")
-
-with col3:
-    prompt = st.chat_input("Type your message...")
-
-st.markdown("</div>", unsafe_allow_html=True)
-
-# === FILE PROCESSING ===
-if uploaded and uploaded.name != st.session_state.last_file:
-    with st.spinner("Reading file..."):
+# Extract text from uploaded file
+if uploaded_file and uploaded_file.name != st.session_state.uploaded_file_name:
+    with st.spinner("Reading your file..."):
         text = ""
-        ext = uploaded.name.split(".")[-1].lower()
+        ext = uploaded_file.name.split(".")[-1].lower()
         try:
             if ext == "pdf" and PyPDF2:
-                reader = PyPDF2.PdfReader(uploaded)
+                reader = PyPDF2.PdfReader(uploaded_file)
                 for page in reader.pages:
-                    t = page.extract_text()
-                    if t: text += t + "\n"
+                    page_text = page.extract_text()
+                    if page_text: text += page_text + "\n"
             elif ext == "docx" and docx:
-                doc = docx.Document(uploaded)
-                text = "\n".join(p.text for p in doc.paragraphs)
+                doc = docx.Document(uploaded_file)
+                for para in doc.paragraphs:
+                    text += para.text + "\n"
             elif ext == "txt":
-                text = uploaded.read().decode("utf-8", errors="ignore")
-            elif ext in ["png","jpg","jpeg"]:
-                img = Image.open(uploaded).convert("RGB")
+                text = uploaded_file.read().decode("utf-8", errors="ignore")
+            elif ext in ["png","jpg","jpeg","gif","bmp","tiff"]:
+                img = Image.open(uploaded_file).convert("RGB")
                 text = pytesseract.image_to_string(img, config=OCR_CONFIG)
-            
+            else:
+                text = "(File type not supported)"
             text = text.strip() or "(No text found)"
-            st.session_state.pending_text = text
-            st.session_state.last_file = uploaded.name
-            st.success("File ready!")
-        except:
-            st.error("Couldn’t read file.")
-            st.session_state.pending_text = None
+            st.session_state.pending_ocr_text = text
+            st.session_state.uploaded_file_name = uploaded_file.name
+            st.success(f"Got it! I’ve read: {uploaded_file.name}")
+        except Exception as e:
+            st.error("Couldn't read the file.")
+            st.session_state.pending_ocr_text = None
 
-# === SEND MESSAGE ===
-if prompt:
-    # Add file text if present
-    if st.session_state.pending_text:
-        full_prompt = f"uploaded-file-text{{{st.session_state.pending_text}}}\nuser-query{{{prompt}}}"
-        st.session_state.pending_text = None
+# Chat input
+user_input = st.chat_input("Ask me anything or paste your homework...")
+if user_input:
+    # Attach uploaded text if exists
+    if st.session_state.pending_ocr_text:
+        full_prompt = f"uploaded-file-text{{{st.session_state.pending_ocr_text}}}\nuser-query{{{user_input}}}"
+        st.session_state.pending_ocr_text = None
     else:
-        full_prompt = f"user-query{{{prompt}}}"
+        full_prompt = f"user-query{{{user_input}}}"
 
-    st.session_state.messages.append({"role": "user", "content": full_prompt, "display_text": prompt})
+    st.session_state.messages.append({"role": "user", "content": full_prompt, "display_text": user_input})
     with st.chat_message("user"):
-        st.markdown(prompt)
+        st.markdown(user_input)
 
-    # AI RESPONSE WITH THINKING → TYPING CURSOR
+    # AI Response — Thinking → disappears → typing with blinking cursor
     with st.chat_message("assistant"):
         thinking = st.empty()
         thinking.markdown('<div class="thinking">Thinking<span class="dot">.</span><span class="dot">.</span><span class="dot">.</span></div>', unsafe_allow_html=True)
 
         placeholder = st.empty()
-        answer = ""
+        response = ""
 
         try:
             payload = {
@@ -164,18 +162,18 @@ if prompt:
                 for line in r.iter_lines():
                     if line:
                         token = json.loads(line).get("message", {}).get("content", "")
-                        answer += token
+                        response += token
                         if first:
                             thinking.empty()
                             first = False
-                        placeholder.markdown(answer + "▋", unsafe_allow_html=True)
+                        placeholder.markdown(response + "▋", unsafe_allow_html=True)
                         time.sleep(0.01)
-                placeholder.markdown(answer)
+                placeholder.markdown(response)
         except:
             thinking.empty()
-            placeholder.markdown("Sorry, I couldn't connect.")
+            placeholder.markdown("Sorry, I can't connect right now.")
 
-        st.session_state.messages.append({"role": "assistant", "content": answer, "display_text": answer})
+        st.session_state.messages.append({"role": "assistant", "content": response, "display_text": response})
 
-# === FOOTER ===
-st.markdown("<p style='text-align:center; color:#555; margin-top:50px;'>Spartan AI • Senior Project • Dallin Geurts • 2025</p>", unsafe_allow_html=True)
+# Footer
+st.markdown('<div class="footer-text">Spartan AI • Senior Project • Dallin Geurts • 2025</div>', unsafe_allow_html=True)
