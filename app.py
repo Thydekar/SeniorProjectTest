@@ -1,4 +1,4 @@
-# app.py - Spartan AI Student Chatbot (Minimal Final Version + silent 67s ping)
+# app.py - Spartan AI Student Chatbot (5-minute keep-alive ping + perfect cursor)
 import streamlit as st
 import requests
 from requests.auth import HTTPBasicAuth
@@ -18,7 +18,7 @@ try:
 except ImportError:
     docx = None
 
-# Config
+# Config — ONLY Student Model
 NGROK_URL = "https://ona-overcritical-extrinsically.ngrok-free.dev"
 MODEL = "spartan-student"
 OLLAMA_CHAT_URL = f"{NGROK_URL}/api/chat"
@@ -28,7 +28,7 @@ OCR_CONFIG = r"--oem 3 --psm 6"
 
 st.set_page_config(page_title="Spartan AI - Student Chatbot", layout="wide")
 
-# CSS (unchanged)
+# CSS + animations (cursor intact!)
 st.markdown("""
 <style>
     body, .css-18e3th9 {background-color: #0d1117 !important; color: #c9d1d9 !important;}
@@ -116,7 +116,7 @@ if uploaded_file and uploaded_file.name != st.session_state.uploaded_file_name:
             st.session_state.pending_ocr_text = text
             st.session_state.uploaded_file_name = uploaded_file.name
             st.success(f"Got it! I’ve read: {uploaded_file.name}")
-        except Exception:
+        except:
             st.error("Couldn't read the file.")
             st.session_state.pending_ocr_text = None
 
@@ -133,6 +133,7 @@ if user_input:
     with st.chat_message("user"):
         st.markdown(user_input)
 
+    # AI RESPONSE — PERFECT: Thinking → disappears → typing with blinking cursor
     with st.chat_message("assistant"):
         thinking = st.empty()
         thinking.markdown('<div class="thinking">Thinking<span class="dot">.</span><span class="dot">.</span><span class="dot">.</span></div>', unsafe_allow_html=True)
@@ -175,7 +176,7 @@ if user_input:
 # Footer
 st.markdown('<div class="footer-text">Spartan AI • Senior Project • Dallin Geurts • 2025</div>', unsafe_allow_html=True)
 
-# KEEP-ALIVE PING every 67 seconds (silent, no interference)
+# SILENT KEEP-ALIVE PING — NOW EVERY 5 MINUTES (300 seconds)
 def keep_alive():
     while True:
         try:
@@ -187,11 +188,11 @@ def keep_alive():
                     "stream": False
                 },
                 auth=HTTPBasicAuth(USERNAME, PASSWORD),
-                timeout=10  # short timeout, we don't wait
+                timeout=10
             )
         except:
-            pass
-        time.sleep(67)
+            pass  # Silent — never breaks anything
+        time.sleep(300)  # 300 seconds = 5 minutes
 
 if "ping_started" not in st.session_state:
     threading.Thread(target=keep_alive, daemon=True).start()
