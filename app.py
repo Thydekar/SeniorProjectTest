@@ -1,4 +1,4 @@
-# app.py - Spartan AI Student Chatbot (5-minute keep-alive ping + perfect cursor)
+# app.py - Spartan AI Student Chatbot (Minimal Final Version + 5-minute keep-alive)
 import streamlit as st
 import requests
 from requests.auth import HTTPBasicAuth
@@ -8,7 +8,7 @@ import pytesseract
 from PIL import Image
 import threading
 
-# Graceful imports
+# Graceful imports for PDFs/DOCX
 try:
     import PyPDF2
 except ImportError:
@@ -28,7 +28,7 @@ OCR_CONFIG = r"--oem 3 --psm 6"
 
 st.set_page_config(page_title="Spartan AI - Student Chatbot", layout="wide")
 
-# CSS + animations (cursor intact!)
+# Beautiful CSS (kept exactly as you love it)
 st.markdown("""
 <style>
     body, .css-18e3th9 {background-color: #0d1117 !important; color: #c9d1d9 !important;}
@@ -39,6 +39,7 @@ st.markdown("""
     .stChatMessage.assistant {background-color: #f0ad4e !important; border-radius: 12px !important; color: black !important;}
     footer {visibility: hidden;}
     .footer-text {text-align: center; color: #8b949e; font-size: 0.85em; padding: 20px 0;}
+    /* New Chat button — top left, exactly as before */
     .new-chat-btn {
         position: fixed;
         top: 20px;
@@ -53,6 +54,7 @@ st.markdown("""
         box-shadow: 0 4px 12px rgba(0,0,0,0.4);
     }
     .new-chat-btn:hover {background: #2ea043 !important;}
+    /* Thinking animation */
     .thinking {display: inline-block; font-size: 1.2em; font-weight: bold; color: #58a6ff;}
     .dot {animation: blink 1.4s infinite both;}
     .dot:nth-child(1) {animation-delay: 0s;}
@@ -70,13 +72,14 @@ if "pending_ocr_text" not in st.session_state:
 if "uploaded_file_name" not in st.session_state:
     st.session_state.uploaded_file_name = None
 
-# New Chat button
+# === NEW CHAT BUTTON (top-left, unchanged) ===
 if st.button("New Chat", key="new_chat_btn"):
     st.session_state.messages = [{"role": "assistant", "content": "Hello! I'm your Spartan AI study buddy. How can I help you today?"}]
     st.session_state.pending_ocr_text = None
     st.session_state.uploaded_file_name = None
     st.rerun()
 
+# Title
 st.title("Spartan AI — Student Chatbot")
 
 # Chat history
@@ -90,7 +93,7 @@ uploaded_file = st.file_uploader(
     type=["pdf","docx","txt","png","jpg","jpeg","gif","bmp","tiff"]
 )
 
-# Extract text
+# Extract text from uploaded file
 if uploaded_file and uploaded_file.name != st.session_state.uploaded_file_name:
     with st.spinner("Reading your file..."):
         text = ""
@@ -99,8 +102,8 @@ if uploaded_file and uploaded_file.name != st.session_state.uploaded_file_name:
             if ext == "pdf" and PyPDF2:
                 reader = PyPDF2.PdfReader(uploaded_file)
                 for page in reader.pages:
-                    t = page.extract_text()
-                    if t: text += t + "\n"
+                    page_text = page.extract_text()
+                    if page_text: text += page_text + "\n"
             elif ext == "docx" and docx:
                 doc = docx.Document(uploaded_file)
                 for para in doc.paragraphs:
@@ -116,7 +119,7 @@ if uploaded_file and uploaded_file.name != st.session_state.uploaded_file_name:
             st.session_state.pending_ocr_text = text
             st.session_state.uploaded_file_name = uploaded_file.name
             st.success(f"Got it! I’ve read: {uploaded_file.name}")
-        except:
+        except Exception:
             st.error("Couldn't read the file.")
             st.session_state.pending_ocr_text = None
 
@@ -133,7 +136,7 @@ if user_input:
     with st.chat_message("user"):
         st.markdown(user_input)
 
-    # AI RESPONSE — PERFECT: Thinking → disappears → typing with blinking cursor
+    # AI Response — PERFECT: Thinking → disappears → typing with blinking cursor
     with st.chat_message("assistant"):
         thinking = st.empty()
         thinking.markdown('<div class="thinking">Thinking<span class="dot">.</span><span class="dot">.</span><span class="dot">.</span></div>', unsafe_allow_html=True)
@@ -163,7 +166,7 @@ if user_input:
                         if first:
                             thinking.empty()
                             first = False
-                        placeholder.markdown(response + "cursor", unsafe_allow_html=True)
+                        placeholder.markdown(response + "block cursor", unsafe_allow_html=True)
                         time.sleep(0.01)
                 placeholder.markdown(response)
                 thinking.empty()
@@ -176,7 +179,7 @@ if user_input:
 # Footer
 st.markdown('<div class="footer-text">Spartan AI • Senior Project • Dallin Geurts • 2025</div>', unsafe_allow_html=True)
 
-# SILENT KEEP-ALIVE PING — NOW EVERY 5 MINUTES (300 seconds)
+# KEEP-ALIVE PING every 5 minutes (300 seconds) — silent, no interference
 def keep_alive():
     while True:
         try:
@@ -191,8 +194,8 @@ def keep_alive():
                 timeout=10
             )
         except:
-            pass  # Silent — never breaks anything
-        time.sleep(300)  # 300 seconds = 5 minutes
+            pass
+        time.sleep(300)  # 5 minutes
 
 if "ping_started" not in st.session_state:
     threading.Thread(target=keep_alive, daemon=True).start()
