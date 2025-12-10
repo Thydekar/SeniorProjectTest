@@ -1,4 +1,4 @@
-# app.py - Spartan AI Student Chatbot (Minimal Final Version)
+# app.py - Spartan AI Student Chatbot (Minimal Final Version + 67s keep-alive ping)
 import streamlit as st
 import requests
 from requests.auth import HTTPBasicAuth
@@ -6,6 +6,7 @@ import json
 import time
 import pytesseract
 from PIL import Image
+import threading
 
 # Graceful imports for PDFs/DOCX
 try:
@@ -27,7 +28,7 @@ OCR_CONFIG = r"--oem 3 --psm 6"
 
 st.set_page_config(page_title="Spartan AI - Student Chatbot", layout="wide")
 
-# Beautiful CSS (kept exactly as you love it)
+# Beautiful CSS (unchanged)
 st.markdown("""
 <style>
     body, .css-18e3th9 {background-color: #0d1117 !important; color: #c9d1d9 !important;}
@@ -38,8 +39,6 @@ st.markdown("""
     .stChatMessage.assistant {background-color: #f0ad4e !important; border-radius: 12px !important; color: black !important;}
     footer {visibility: hidden;}
     .footer-text {text-align: center; color: #8b949e; font-size: 0.85em; padding: 20px 0;}
-
-    /* New Chat button — top left, exactly as before */
     .new-chat-btn {
         position: fixed;
         top: 20px;
@@ -54,8 +53,6 @@ st.markdown("""
         box-shadow: 0 4px 12px rgba(0,0,0,0.4);
     }
     .new-chat-btn:hover {background: #2ea043 !important;}
-
-    /* Thinking animation */
     .thinking {display: inline-block; font-size: 1.2em; font-weight: bold; color: #58a6ff;}
     .dot {animation: blink 1.4s infinite both;}
     .dot:nth-child(1) {animation-delay: 0s;}
@@ -127,7 +124,6 @@ if uploaded_file and uploaded_file.name != st.session_state.uploaded_file_name:
 # Chat input
 user_input = st.chat_input("Ask me anything or paste your homework...")
 if user_input:
-    # Attach uploaded text if exists
     if st.session_state.pending_ocr_text:
         full_prompt = f"uploaded-file-text{{{st.session_state.pending_ocr_text}}}\nuser-query{{{user_input}}}"
         st.session_state.pending_ocr_text = None
@@ -138,7 +134,7 @@ if user_input:
     with st.chat_message("user"):
         st.markdown(user_input)
 
-    # AI Response — Thinking → disappears → typing with blinking cursor
+    # AI Response — with thinking + blinking cursor
     with st.chat_message("assistant"):
         thinking = st.empty()
         thinking.markdown('<div class="thinking">Thinking<span class="dot">.</span><span class="dot">.</span><span class="dot">.</span></div>', unsafe_allow_html=True)
@@ -169,6 +165,7 @@ if user_input:
                         placeholder.markdown(response + "▋", unsafe_allow_html=True)
                         time.sleep(0.01)
                 placeholder.markdown(response)
+                thinking.empty()
         except:
             thinking.empty()
             placeholder.markdown("Sorry, I can't connect right now.")
@@ -177,3 +174,29 @@ if user_input:
 
 # Footer
 st.markdown('<div class="footer-text">Spartan AI • Senior Project • Dallin Geurts • 2025</div>', unsafe_allow_html=True)
+
+# ========================================
+# INVISIBLE KEEP-ALIVE PING EVERY 67 SECONDS
+# ========================================
+def keep_alive():
+    while True:
+        try:
+            requests.post(
+                OLLAMA_CHAT_URL,
+                json={
+                    "model": MODEL,
+                    "messages": [{"role": "system", "content": "server-ping{ping}"}],
+                    "stream": False
+                },
+                auth=HTTPBasicAuth(USERNAME, PASSWORD),
+                timeout=False,
+                timeout=10
+            )
+        except:
+            pass  # Silent — we don't care if it fails
+        time.sleep(67)
+
+# Start the ping thread once
+if "ping_thread_started" not in st.session_state:
+    threading.Thread(target=keep_alive, daemon=True).start()
+    st.session_state.ping_thread_started = True
