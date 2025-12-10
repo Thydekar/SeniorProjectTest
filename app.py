@@ -1,4 +1,4 @@
-# app.py - Spartan AI Student Chatbot (Minimal Final Version + 67s keep-alive ping)
+# app.py - Spartan AI Student Chatbot (Minimal Final Version + silent 67s ping)
 import streamlit as st
 import requests
 from requests.auth import HTTPBasicAuth
@@ -8,7 +8,7 @@ import pytesseract
 from PIL import Image
 import threading
 
-# Graceful imports for PDFs/DOCX
+# Graceful imports
 try:
     import PyPDF2
 except ImportError:
@@ -18,7 +18,7 @@ try:
 except ImportError:
     docx = None
 
-# Config — ONLY Student Model
+# Config
 NGROK_URL = "https://ona-overcritical-extrinsically.ngrok-free.dev"
 MODEL = "spartan-student"
 OLLAMA_CHAT_URL = f"{NGROK_URL}/api/chat"
@@ -28,7 +28,7 @@ OCR_CONFIG = r"--oem 3 --psm 6"
 
 st.set_page_config(page_title="Spartan AI - Student Chatbot", layout="wide")
 
-# Beautiful CSS (unchanged)
+# CSS (unchanged)
 st.markdown("""
 <style>
     body, .css-18e3th9 {background-color: #0d1117 !important; color: #c9d1d9 !important;}
@@ -70,14 +70,13 @@ if "pending_ocr_text" not in st.session_state:
 if "uploaded_file_name" not in st.session_state:
     st.session_state.uploaded_file_name = None
 
-# === NEW CHAT BUTTON (top-left, unchanged) ===
+# New Chat button
 if st.button("New Chat", key="new_chat_btn"):
     st.session_state.messages = [{"role": "assistant", "content": "Hello! I'm your Spartan AI study buddy. How can I help you today?"}]
     st.session_state.pending_ocr_text = None
     st.session_state.uploaded_file_name = None
     st.rerun()
 
-# Title
 st.title("Spartan AI — Student Chatbot")
 
 # Chat history
@@ -91,7 +90,7 @@ uploaded_file = st.file_uploader(
     type=["pdf","docx","txt","png","jpg","jpeg","gif","bmp","tiff"]
 )
 
-# Extract text from uploaded file
+# Extract text
 if uploaded_file and uploaded_file.name != st.session_state.uploaded_file_name:
     with st.spinner("Reading your file..."):
         text = ""
@@ -100,8 +99,8 @@ if uploaded_file and uploaded_file.name != st.session_state.uploaded_file_name:
             if ext == "pdf" and PyPDF2:
                 reader = PyPDF2.PdfReader(uploaded_file)
                 for page in reader.pages:
-                    page_text = page.extract_text()
-                    if page_text: text += page_text + "\n"
+                    t = page.extract_text()
+                    if t: text += t + "\n"
             elif ext == "docx" and docx:
                 doc = docx.Document(uploaded_file)
                 for para in doc.paragraphs:
@@ -117,7 +116,7 @@ if uploaded_file and uploaded_file.name != st.session_state.uploaded_file_name:
             st.session_state.pending_ocr_text = text
             st.session_state.uploaded_file_name = uploaded_file.name
             st.success(f"Got it! I’ve read: {uploaded_file.name}")
-        except Exception as e:
+        except Exception:
             st.error("Couldn't read the file.")
             st.session_state.pending_ocr_text = None
 
@@ -130,11 +129,10 @@ if user_input:
     else:
         full_prompt = f"user-query{{{user_input}}}"
 
-    st.session_state.messages.append({"role": "user", "content": full_prompt, "display_text": user_input})
+    st.session_state.messages.append({"role":"user","content":full_prompt,"display_text":user_input})
     with st.chat_message("user"):
         st.markdown(user_input)
 
-    # AI Response — with thinking + blinking cursor
     with st.chat_message("assistant"):
         thinking = st.empty()
         thinking.markdown('<div class="thinking">Thinking<span class="dot">.</span><span class="dot">.</span><span class="dot">.</span></div>', unsafe_allow_html=True)
@@ -151,7 +149,9 @@ if user_input:
             with requests.post(
                 OLLAMA_CHAT_URL, json=payload,
                 auth=HTTPBasicAuth(USERNAME, PASSWORD),
-                timeout=600, verify=False, stream=True
+                timeout=600,
+                verify=False,
+                stream=True
             ) as r:
                 r.raise_for_status()
                 first = True
@@ -162,7 +162,7 @@ if user_input:
                         if first:
                             thinking.empty()
                             first = False
-                        placeholder.markdown(response + "▋", unsafe_allow_html=True)
+                        placeholder.markdown(response + "cursor", unsafe_allow_html=True)
                         time.sleep(0.01)
                 placeholder.markdown(response)
                 thinking.empty()
@@ -170,14 +170,12 @@ if user_input:
             thinking.empty()
             placeholder.markdown("Sorry, I can't connect right now.")
 
-        st.session_state.messages.append({"role": "assistant", "content": response, "display_text": response})
+        st.session_state.messages.append({"role":"assistant","content":response,"display_text":response})
 
 # Footer
 st.markdown('<div class="footer-text">Spartan AI • Senior Project • Dallin Geurts • 2025</div>', unsafe_allow_html=True)
 
-# ========================================
-# INVISIBLE KEEP-ALIVE PING EVERY 67 SECONDS
-# ========================================
+# KEEP-ALIVE PING every 67 seconds (silent, no interference)
 def keep_alive():
     while True:
         try:
@@ -189,14 +187,12 @@ def keep_alive():
                     "stream": False
                 },
                 auth=HTTPBasicAuth(USERNAME, PASSWORD),
-                timeout=False,
-                timeout=10
+                timeout=10  # short timeout, we don't wait
             )
         except:
-            pass  # Silent — we don't care if it fails
+            pass
         time.sleep(67)
 
-# Start the ping thread once
-if "ping_thread_started" not in st.session_state:
+if "ping_started" not in st.session_state:
     threading.Thread(target=keep_alive, daemon=True).start()
-    st.session_state.ping_thread_started = True
+    st.session_state.ping_started = True
