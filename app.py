@@ -1,4 +1,3 @@
-# app.py - Spartan AI Student Chatbot - FINAL with REAL animated blinking cursor
 import streamlit as st
 import requests
 from requests.auth import HTTPBasicAuth
@@ -8,7 +7,6 @@ import pytesseract
 from PIL import Image
 import threading
 
-# Graceful imports
 try:
     import PyPDF2
 except ImportError:
@@ -18,8 +16,7 @@ try:
 except ImportError:
     docx = None
 
-# Config
-NGROK_URL = "https://ona-overcritical-extrinsically.ngrok-free.app"
+NGROK_URL = "https://ona-overcritical-extrinsically.ngrok-free.dev"
 MODEL = "spartan-student"
 OLLAMA_CHAT_URL = f"{NGROK_URL}/api/chat"
 USERNAME = "dgeurts"
@@ -28,7 +25,6 @@ OCR_CONFIG = r"--oem 3 --psm 6"
 
 st.set_page_config(page_title="Spartan AI - Student Chatbot", layout="wide")
 
-# CSS — REAL ANIMATED BLINKING CURSOR
 st.markdown("""
 <style>
     body, .css-18e3th9 {background-color: #0d1117 !important; color: #c9d1d9 !important;}
@@ -62,7 +58,6 @@ st.markdown("""
     .dot:nth-child(3) {animation-delay: 0.4s;}
     @keyframes blink {0%, 80%, 100% {opacity: 0.3;} 20% {opacity: 1;}}
 
-    /* REAL BLINKING CURSOR — REAL ANIMATION */
     @keyframes cursor-blink {
         0%, 50% {opacity: 1;}
         51%, 100% {opacity: 0;}
@@ -77,7 +72,6 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# Session state
 if "messages" not in st.session_state:
     st.session_state.messages = [{"role": "assistant", "content": "Hello! I'm your Spartan AI study buddy. How can I help you today?"}]
 if "pending_ocr_text" not in st.session_state:
@@ -85,7 +79,6 @@ if "pending_ocr_text" not in st.session_state:
 if "uploaded_file_name" not in st.session_state:
     st.session_state.uploaded_file_name = None
 
-# New Chat button
 if st.button("New Chat", key="new_chat_btn"):
     st.session_state.messages = [{"role": "assistant", "content": "Hello! I'm your Spartan AI study buddy. How can I help you today?"}]
     st.session_state.pending_ocr_text = None
@@ -94,18 +87,15 @@ if st.button("New Chat", key="new_chat_btn"):
 
 st.title("Spartan AI — Student Chatbot")
 
-# Chat history
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg.get("display_text", msg["content"]))
 
-# File uploader
 uploaded_file = st.file_uploader(
     "Upload a file (PDF, DOCX, TXT, image, etc.) — I’ll read it for you!",
     type=["pdf","docx","txt","png","jpg","jpeg","gif","bmp","tiff"]
 )
 
-# Extract text
 if uploaded_file and uploaded_file.name != st.session_state.uploaded_file_name:
     with st.spinner("Reading your file..."):
         text = ""
@@ -135,7 +125,6 @@ if uploaded_file and uploaded_file.name != st.session_state.uploaded_file_name:
             st.error("Couldn't read the file.")
             st.session_state.pending_ocr_text = None
 
-# Chat input
 user_input = st.chat_input("Ask me anything or paste your homework...")
 if user_input:
     if st.session_state.pending_ocr_text:
@@ -148,7 +137,6 @@ if user_input:
     with st.chat_message("user"):
         st.markdown(user_input)
 
-    # AI RESPONSE — Thinking → disappears → typing with REAL blinking cursor
     with st.chat_message("assistant"):
         thinking = st.empty()
         thinking.markdown('<div class="thinking">Thinking<span class="dot">.</span><span class="dot">.</span><span class="dot">.</span></div>', unsafe_allow_html=True)
@@ -157,43 +145,71 @@ if user_input:
         response = ""
 
         try:
+            headers = {
+                "Content-Type": "application/json",
+                "ngrok-skip-browser-warning": "69420",
+            }
+
             payload = {
                 "model": MODEL,
                 "messages": [{"role": m["role"], "content": m["content"]} for m in st.session_state.messages],
                 "stream": True
             }
+
             with requests.post(
-                OLLAMA_CHAT_URL, json=payload,
+                OLLAMA_CHAT_URL,
+                json=payload,
                 auth=HTTPBasicAuth(USERNAME, PASSWORD),
-                timeout=600,
+                headers=headers,
+                timeout=(15, 180),
                 verify=False,
                 stream=True
             ) as r:
                 r.raise_for_status()
-                first = True
+
+                first_chunk = True
                 for line in r.iter_lines():
                     if line:
-                        token = json.loads(line).get("message", {}).get("content", "")
-                        response += token
-                        if first:
+                        try:
+                            data = json.loads(line.decode('utf-8'))
+                            token = data.get("message", {}).get("content", "")
+                            if token:
+                                response += token
+                        except:
+                            continue
+
+                        if first_chunk:
                             thinking.empty()
-                            first = False
-                        # REAL ANIMATED BLINKING CURSOR
+                            first_chunk = False
+
                         placeholder.markdown(f'<span class="typing-cursor">{response}</span>', unsafe_allow_html=True)
-                        time.sleep(0.01)
-                # Final text without cursor
+                        time.sleep(0.015)
+
                 placeholder.markdown(response)
                 thinking.empty()
-        except:
+
+        except requests.exceptions.HTTPError as http_err:
             thinking.empty()
-            placeholder.markdown("Sorry, I can't connect right now.")
+            err_text = f"Error {r.status_code}: {r.text[:300]}"
+            placeholder.error(err_text)
 
-        st.session_state.messages.append({"role":"assistant","content":response,"display_text":response})
+        except requests.exceptions.ConnectionError:
+            thinking.empty()
+            placeholder.error("Connection failed – check ngrok URL and tunnel status")
 
-# Footer
+        except requests.exceptions.Timeout:
+            thinking.empty()
+            placeholder.error("Request timed out")
+
+        except Exception as e:
+            thinking.empty()
+            placeholder.error(f"Error: {str(e)}")
+
+        if response:
+            st.session_state.messages.append({"role":"assistant","content":response,"display_text":response})
+
 st.markdown('<div class="footer-text">Spartan AI • Senior Project • Dallin Geurts • 2025</div>', unsafe_allow_html=True)
 
-# KEEP-ALIVE PING every 5 minutes (300 seconds)
 def keep_alive():
     while True:
         try:
@@ -209,7 +225,7 @@ def keep_alive():
             )
         except:
             pass
-        time.sleep(300)  # 5 minutes
+        time.sleep(300)
 
 if "ping_started" not in st.session_state:
     threading.Thread(target=keep_alive, daemon=True).start()
