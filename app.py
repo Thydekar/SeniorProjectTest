@@ -162,13 +162,16 @@ section[data-testid="stSidebar"] > div { padding: 0 !important; }
     text-transform: uppercase; letter-spacing: 0.14em; padding: 18px 24px 7px;
 }
 
+div[data-testid="stSidebar"] .stButton { padding: 0 8px !important; }
 div[data-testid="stSidebar"] .stButton > button {
     background: transparent !important; border: none !important;
     border-radius: 10px !important; color: var(--text-muted) !important;
     font-family: 'Figtree', sans-serif !important; font-size: 0.875rem !important;
-    font-weight: 500 !important; padding: 11px 18px !important;
-    width: calc(100% - 16px) !important; margin: 1px 8px !important;
+    font-weight: 500 !important; padding: 10px 14px !important;
+    width: 100% !important; margin: 1px 0 !important;
     text-align: left !important; transition: all 0.18s ease !important;
+    justify-content: flex-start !important;
+    overflow: hidden !important; text-overflow: ellipsis !important; white-space: nowrap !important;
 }
 div[data-testid="stSidebar"] .stButton > button:hover {
     background: rgba(255,255,255,0.055) !important;
@@ -408,6 +411,21 @@ div[data-testid="stAlert"] {
 div[data-testid="stDecoration"] { display: none !important; }
 div[data-testid="stStatusWidget"] { display: none !important; }
 .stDeployButton { display: none !important; }
+
+/* ── Hide home-card "Open ___" buttons — cards are decorative, nav is sidebar-only ── */
+div[data-testid="stMain"] .cards-col-wrap .stButton > button,
+[data-testid="stVerticalBlock"] [data-testid="stVerticalBlock"] .stButton[data-testid*="home_card"] > button {
+    display: none !important;
+}
+/* Broader catch: any button whose text starts with "Open " inside the home columns */
+.home-card-col .stButton > button { display: none !important; }
+
+/* ── Fix sidebar button left-clip ── */
+section[data-testid="stSidebar"] .stButton > button {
+    overflow: visible !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -475,10 +493,28 @@ if st.session_state.mode == "Home":
     </div>
     """, unsafe_allow_html=True)
 
-    # FIX: Render cards as clickable Streamlit buttons overlaid on styled HTML cards
-    # by using columns instead of a pure-HTML grid (which can't call st.rerun).
+    # Cards are purely decorative — navigation happens via the sidebar only.
+    # We still need hidden Streamlit buttons so the keys exist without rendering visibly.
     col1, col2 = st.columns(2)
     tool_items = list(TOOL_META.items())
+
+    # Inject a CSS rule that hides every button inside these specific column keys
+    st.markdown("""
+    <style>
+    /* Hide the invisible nav buttons on the home page cards */
+    [data-testid="stHorizontalBlock"] [data-testid="stVerticalBlock"] .stButton > button {
+        display: none !important;
+        height: 0 !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        border: none !important;
+        overflow: hidden !important;
+    }
+    [data-testid="stHorizontalBlock"] [data-testid="stVerticalBlock"] .stButton {
+        margin: 0 !important; padding: 0 !important; height: 0 !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
 
     for idx, (name, meta) in enumerate(tool_items):
         col = col1 if idx % 2 == 0 else col2
@@ -493,9 +529,9 @@ if st.session_state.mode == "Home":
                 <div class="card-arrow">→</div>
             </div>
             """, unsafe_allow_html=True)
-            # Invisible button placed after card so it's clickable
+            # Hidden button — kept for potential future click-through but visually invisible
             if st.button(f"Open {name}", key=f"home_card_{name}",
-                         help=f"Open {name}",
+                         help=f"Go to {name}",
                          use_container_width=True):
                 go_to_tool(name)
                 st.rerun()
