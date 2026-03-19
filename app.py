@@ -389,21 +389,17 @@ div[data-testid="stSidebar"] > div > div {
 .topbar-title { font-size: 1rem; font-weight: 600; color: var(--txt); letter-spacing: -0.02em; }
 .topbar-desc { font-size: 0.72rem; color: var(--txt2); font-weight: 300; margin-top: 2px; }
 
-/* new chat button */
-.nc-wrap .stButton > button {
-    all: unset !important;
-    display: inline-flex !important; align-items: center !important;
-    font-family: 'DM Mono', monospace !important;
-    font-size: 0.61rem !important; letter-spacing: 0.08em !important;
-    color: var(--txt3) !important;
-    border: 1px solid var(--line2) !important;
-    border-radius: var(--r) !important;
-    padding: 6px 11px !important; cursor: pointer !important;
-    transition: all 0.15s !important; white-space: nowrap !important;
+/* bottom bar alignment — keep icons vertically centred with chat input */
+div[data-testid="stHorizontalBlock"] {
+    align-items: flex-end !important;
+    gap: 6px !important;
 }
-.nc-wrap .stButton > button:hover {
-    border-color: rgba(255,255,255,0.2) !important;
-    color: var(--txt) !important; background: var(--bg3) !important;
+div[data-testid="stHorizontalBlock"] > div:nth-child(1),
+div[data-testid="stHorizontalBlock"] > div:nth-child(2) {
+    flex: 0 0 40px !important;
+    min-width: 40px !important;
+    max-width: 40px !important;
+    padding: 0 !important;
 }
 
 /* ════════════════════════════════
@@ -773,26 +769,17 @@ tool  = st.session_state.mode
 model = MODEL_MAP[tool]
 tmeta = TOOL_META[tool]
 
-col_hdr, col_btn = st.columns([5, 1])
-with col_hdr:
-    st.markdown(f"""
-    <div class="topbar">
-        <div class="topbar-left">
-            <div class="topbar-pill" style="color:{tmeta['color']};">{tmeta['tag']}</div>
-            <div>
-                <div class="topbar-title">{tool}</div>
-                <div class="topbar-desc">{tmeta['desc']}</div>
-            </div>
+st.markdown(f"""
+<div class="topbar">
+    <div class="topbar-left">
+        <div class="topbar-pill" style="color:{tmeta['color']};">{tmeta['tag']}</div>
+        <div>
+            <div class="topbar-title">{tool}</div>
+            <div class="topbar-desc">{tmeta['desc']}</div>
         </div>
     </div>
-    """, unsafe_allow_html=True)
-
-with col_btn:
-    st.markdown('<div class="nc-wrap" style="padding-top:24px; display:flex; justify-content:flex-end;">', unsafe_allow_html=True)
-    if st.button("+ new chat", key="new_chat"):
-        go_to_tool(tool)
-        st.rerun()
-    st.markdown('</div>', unsafe_allow_html=True)
+</div>
+""", unsafe_allow_html=True)
 
 # ── Chat history ──────────────────────────────────────────────────────────────
 for i, msg in enumerate(st.session_state.messages):
@@ -802,13 +789,98 @@ for i, msg in enumerate(st.session_state.messages):
         else:
             st.markdown(msg.get("display_text", msg["content"]))
 
-# ── File uploader ─────────────────────────────────────────────────────────────
-uploaded_file = st.file_uploader(
-    "attach",
-    type=["pdf", "docx", "txt", "png", "jpg", "jpeg", "gif", "bmp", "tiff"],
-    label_visibility="collapsed",
-)
+# ── Bottom input bar: [new chat] [attach file] [chat input] ──────────────────
+# Layout: narrow col for new-chat icon | narrow col for file button | wide col for chat input
+bot_nc, bot_file, bot_chat = st.columns([1, 1, 14])
 
+with bot_nc:
+    # New chat icon button
+    st.markdown("""
+    <style>
+    div[data-testid="stHorizontalBlock"] > div:nth-child(1) .stButton > button {
+        all: unset !important;
+        width: 40px !important; height: 40px !important;
+        display: flex !important; align-items: center !important; justify-content: center !important;
+        background: var(--bg3) !important;
+        border: 1px solid var(--line2) !important;
+        border-radius: 8px !important;
+        cursor: pointer !important;
+        color: var(--txt3) !important;
+        font-size: 1rem !important;
+        transition: background 0.15s, border-color 0.15s, color 0.15s !important;
+        margin-top: 2px !important;
+    }
+    div[data-testid="stHorizontalBlock"] > div:nth-child(1) .stButton > button:hover {
+        background: var(--bg4) !important;
+        border-color: rgba(255,255,255,0.18) !important;
+        color: var(--txt) !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+    if st.button("↺", key="new_chat", help="New chat"):
+        go_to_tool(tool)
+        st.rerun()
+
+with bot_file:
+    # Compact file uploader — just an icon button, no label/drag area shown
+    st.markdown("""
+    <style>
+    /* shrink the file uploader to just its browse button */
+    div[data-testid="stHorizontalBlock"] > div:nth-child(2) div[data-testid="stFileUploader"] {
+        width: 40px !important;
+    }
+    div[data-testid="stHorizontalBlock"] > div:nth-child(2) div[data-testid="stFileUploader"] > div {
+        background: var(--bg3) !important;
+        border: 1px solid var(--line2) !important;
+        border-radius: 8px !important;
+        padding: 0 !important;
+        width: 40px !important; height: 40px !important;
+        display: flex !important; align-items: center !important; justify-content: center !important;
+        overflow: hidden !important;
+        cursor: pointer !important;
+        transition: background 0.15s, border-color 0.15s !important;
+    }
+    div[data-testid="stHorizontalBlock"] > div:nth-child(2) div[data-testid="stFileUploader"] > div:hover {
+        background: var(--bg4) !important;
+        border-color: rgba(200,255,87,0.25) !important;
+    }
+    /* hide the text labels and drag-drop zone, show only the button */
+    div[data-testid="stHorizontalBlock"] > div:nth-child(2) div[data-testid="stFileUploader"] label,
+    div[data-testid="stHorizontalBlock"] > div:nth-child(2) div[data-testid="stFileUploader"] small,
+    div[data-testid="stHorizontalBlock"] > div:nth-child(2) div[data-testid="stFileUploader"] span:not([data-testid="stFileUploaderDropzone"]) {
+        display: none !important;
+    }
+    /* style the browse button itself as a paperclip icon */
+    div[data-testid="stHorizontalBlock"] > div:nth-child(2) div[data-testid="stFileUploader"] button {
+        all: unset !important;
+        display: flex !important; align-items: center !important; justify-content: center !important;
+        width: 40px !important; height: 40px !important;
+        cursor: pointer !important;
+        font-size: 1rem !important;
+        color: var(--txt3) !important;
+    }
+    /* if a file is attached, show a tiny green dot indicator */
+    div[data-testid="stHorizontalBlock"] > div:nth-child(2) div[data-testid="stFileUploader"] div[data-testid="stFileUploaderFile"] {
+        position: absolute !important;
+        width: 6px !important; height: 6px !important;
+        background: var(--accent) !important;
+        border-radius: 50% !important;
+        top: 4px !important; right: 4px !important;
+        overflow: hidden !important; font-size: 0 !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+    uploaded_file = st.file_uploader(
+        "📎",
+        type=["pdf", "docx", "txt", "png", "jpg", "jpeg", "gif", "bmp", "tiff"],
+        label_visibility="collapsed",
+        key="file_uploader",
+    )
+
+with bot_chat:
+    user_input = st.chat_input("Message Spartan AI…")
+
+# ── Process uploaded file ─────────────────────────────────────────────────────
 if uploaded_file is not None and uploaded_file.name != st.session_state.uploaded_file_name:
     with st.spinner("Reading…"):
         extracted = ""
@@ -842,13 +914,10 @@ if uploaded_file is not None and uploaded_file.name != st.session_state.uploaded
             extracted = extracted.strip() or "(No readable text found)"
             st.session_state.pending_ocr_text   = extracted
             st.session_state.uploaded_file_name = uploaded_file.name
-            st.success(f"✓  {uploaded_file.name}")
+            st.toast(f"✓  {uploaded_file.name}", icon="📎")
 
         except Exception as e:
             st.error(f"Could not read file: {e}")
-
-# ── Chat input ────────────────────────────────────────────────────────────────
-user_input = st.chat_input("Message Spartan AI…")
 
 if user_input:
     # Build content sent to the model
