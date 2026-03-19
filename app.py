@@ -1,10 +1,13 @@
-# app.py — Spartan AI · Terminal-Luxury Redesign
+# app.py — Spartan AI
 import streamlit as st
 import requests
 from requests.auth import HTTPBasicAuth
 import json
 import time
+import re
+import io
 import warnings
+import base64
 
 warnings.filterwarnings("ignore", message="Unverified HTTPS request")
 
@@ -68,6 +71,84 @@ TOOL_META = {
     },
 }
 
+# ── Tag Parser ────────────────────────────────────────────────────────────────
+# Supported output tags from the AI
+OUTPUT_TEXT_RE = re.compile(r'\[output-text\](.*?)\[/output-text\]', re.DOTALL)
+OUTPUT_FILE_RE = re.compile(
+    r'\[output-file-(txt|md|pdf|docx)\](.*?)\[/output-file-(?:txt|md|pdf|docx)\]',
+    re.DOTALL
+)
+
+def parse_ai_response(raw: str) -> list[dict]:
+    """
+    Parse a raw AI response into a list of segments.
+    Each segment is either:
+      {"type": "text",  "content": str}
+      {"type": "file",  "ext": str, "content": str}
+    Untagged text (shouldn't happen per spec, but handle gracefully) is wrapped
+    as a text segment so nothing is silently swallowed.
+    """
+    segments = []
+    cursor = 0
+
+    # Find all tagged regions in document order
+    all_matches = []
+    for m in OUTPUT_TEXT_RE.finditer(raw):
+        all_matches.append(("text", m))
+    for m in OUTPUT_FILE_RE.finditer(raw):
+        all_matches.append(("file", m))
+
+    # Sort by start position
+    all_matches.sort(key=lambda x: x[1].start())
+
+    for kind, m in all_matches:
+        # Any gap before this match → treat as plain text (fallback)
+        gap = raw[cursor:m.start()].strip()
+        if gap:
+            segments.append({"type": "text", "content": gap})
+
+        if kind == "text":
+            content = m.group(1).strip()
+            if content:
+                segments.append({"type": "text", "content": content})
+        else:
+            ext     = m.group(1).lower()
+            content = m.group(2).strip()
+            if content:
+                segments.append({"type": "file", "ext": ext, "content": content})
+
+        cursor = m.end()
+
+    # Trailing untagged text
+    tail = raw[cursor:].strip()
+    if tail:
+        segments.append({"type": "text", "content": tail})
+
+    return segments
+
+
+def make_download_bytes(content: str, ext: str) -> tuple[bytes, str]:
+    """Return (bytes, mime_type) for a file download."""
+    if ext in ("txt", "md"):
+        return content.encode("utf-8"), "text/plain"
+    if ext == "pdf":
+        # We don't have reportlab etc., so deliver as plain text with .pdf name
+        return content.encode("utf-8"), "text/plain"
+    if ext == "docx":
+        if docx_module:
+            doc = docx_module.Document()
+            for line in content.split("\n"):
+                doc.add_paragraph(line)
+            buf = io.BytesIO()
+            doc.save(buf)
+            buf.seek(0)
+            return buf.read(), "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        else:
+            return content.encode("utf-8"), "text/plain"
+    return content.encode("utf-8"), "text/plain"
+
+
+# ── Page config ───────────────────────────────────────────────────────────────
 st.set_page_config(page_title="Spartan AI", layout="wide", initial_sidebar_state="expanded")
 
 # ── CSS ───────────────────────────────────────────────────────────────────────
@@ -79,6 +160,7 @@ st.markdown("""
     --bg:      #0a0a0b;
     --bg2:     #0f0f11;
     --bg3:     #161618;
+    --bg4:     #1c1c1f;
     --line:    rgba(255,255,255,0.06);
     --line2:   rgba(255,255,255,0.10);
     --txt:     rgba(240,240,245,0.90);
@@ -96,7 +178,6 @@ html, body, [class*="css"], .stApp {
     color: var(--txt) !important;
     -webkit-font-smoothing: antialiased !important;
 }
-
 .stApp {
     background-image:
         linear-gradient(var(--line) 1px, transparent 1px),
@@ -104,78 +185,90 @@ html, body, [class*="css"], .stApp {
     background-size: 52px 52px !important;
 }
 
-::-webkit-scrollbar { width: 3px; height: 3px; }
+::-webkit-scrollbar { width: 3px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 3px; }
 
 #MainMenu, footer, header,
 div[data-testid="stDecoration"],
 div[data-testid="stStatusWidget"],
-.stDeployButton { visibility: hidden !important; height: 0 !important; display: none !important; }
+.stDeployButton { display: none !important; }
 
-/* ─── SIDEBAR ─── */
+/* ════════════════════════════════
+   SIDEBAR
+════════════════════════════════ */
 section[data-testid="stSidebar"] {
     background: var(--bg2) !important;
     border-right: 1px solid var(--line2) !important;
     box-shadow: none !important;
-    min-width: 210px !important;
-    max-width: 210px !important;
+    width: 200px !important;
+    min-width: 200px !important;
+    max-width: 200px !important;
 }
 section[data-testid="stSidebar"] > div {
     padding: 0 !important;
-    overflow: hidden !important;
-    width: 210px !important;
+    width: 200px !important;
+    min-width: 200px !important;
+    max-width: 200px !important;
+    overflow-x: hidden !important;
 }
 
+/* brand block */
 .sb-brand {
-    padding: 26px 18px 22px;
+    padding: 24px 16px 18px;
     border-bottom: 1px solid var(--line);
 }
-.sb-brand-row {
-    display: flex; align-items: center; gap: 9px; margin-bottom: 4px;
-}
+.sb-brand-row { display: flex; align-items: center; gap: 8px; margin-bottom: 3px; }
 .sb-sq {
-    width: 26px; height: 26px; flex-shrink: 0;
+    width: 24px; height: 24px; flex-shrink: 0;
     background: var(--accent); border-radius: 4px;
     display: flex; align-items: center; justify-content: center;
 }
-.sb-sq svg { width: 12px; height: 12px; }
+.sb-sq svg { width: 11px; height: 11px; }
 .sb-name {
-    font-size: 0.9rem !important; font-weight: 600 !important;
-    color: var(--txt) !important; letter-spacing: -0.01em;
-    font-family: 'DM Sans', sans-serif !important;
+    font-size: 0.85rem; font-weight: 600;
+    color: var(--txt); letter-spacing: -0.01em;
+    white-space: nowrap;
 }
 .sb-sub {
     font-family: 'DM Mono', monospace;
-    font-size: 0.58rem; color: var(--txt3);
+    font-size: 0.55rem; color: var(--txt3);
     text-transform: uppercase; letter-spacing: 0.12em;
-    padding-left: 35px;
+    padding-left: 32px; white-space: nowrap;
 }
 
+/* section label */
 .sb-section {
     font-family: 'DM Mono', monospace;
-    font-size: 0.57rem; font-weight: 500;
+    font-size: 0.54rem; font-weight: 500;
     color: var(--txt3); text-transform: uppercase; letter-spacing: 0.16em;
-    padding: 18px 18px 5px;
+    padding: 16px 16px 4px;
 }
 
-div[data-testid="stSidebar"] .stButton { padding: 0 8px !important; }
+/* nav buttons — unset all Streamlit default styles */
+div[data-testid="stSidebar"] .stButton {
+    width: 100% !important;
+    padding: 0 6px !important;
+    margin: 0 !important;
+}
 div[data-testid="stSidebar"] .stButton > button {
     all: unset !important;
     display: block !important;
     width: 100% !important;
-    padding: 8px 10px !important;
-    border-radius: var(--r) !important;
+    padding: 7px 10px !important;
+    margin: 1px 0 !important;
+    border-radius: 5px !important;
     font-family: 'DM Sans', sans-serif !important;
-    font-size: 0.8rem !important; font-weight: 400 !important;
+    font-size: 0.78rem !important;
+    font-weight: 400 !important;
     color: var(--txt2) !important;
     cursor: pointer !important;
-    transition: background 0.12s, color 0.12s !important;
     white-space: nowrap !important;
     overflow: hidden !important;
     text-overflow: ellipsis !important;
+    line-height: 1.3 !important;
+    transition: background 0.12s ease, color 0.12s ease !important;
     box-sizing: border-box !important;
-    line-height: 1.4 !important;
 }
 div[data-testid="stSidebar"] .stButton > button:hover {
     background: var(--bg3) !important;
@@ -184,136 +277,132 @@ div[data-testid="stSidebar"] .stButton > button:hover {
 
 .sb-foot {
     position: absolute; bottom: 0; left: 0; right: 0;
-    padding: 14px 18px;
+    padding: 12px 16px;
     border-top: 1px solid var(--line);
     font-family: 'DM Mono', monospace;
-    font-size: 0.57rem; color: var(--txt3); line-height: 1.9;
+    font-size: 0.54rem; color: var(--txt3); line-height: 1.9;
 }
 
-/* ─── MAIN ─── */
+/* ════════════════════════════════
+   MAIN
+════════════════════════════════ */
 .main .block-container {
     max-width: 780px !important;
     padding: 0 2rem 7rem !important;
     position: relative; z-index: 2;
 }
 
-/* ─── HOME PAGE ─── */
-.home-wrap { padding: 60px 0 44px; }
+/* ════════════════════════════════
+   HOME
+════════════════════════════════ */
+.home-wrap { padding: 56px 0 40px; }
 .home-badge {
     display: inline-block;
     font-family: 'DM Mono', monospace;
-    font-size: 0.6rem; letter-spacing: 0.16em; text-transform: uppercase;
+    font-size: 0.58rem; letter-spacing: 0.16em; text-transform: uppercase;
     color: var(--accent);
-    background: rgba(200,255,87,0.08);
+    background: rgba(200,255,87,0.07);
     border: 1px solid rgba(200,255,87,0.18);
-    border-radius: 3px; padding: 3px 10px;
-    margin-bottom: 22px;
+    border-radius: 3px; padding: 3px 9px; margin-bottom: 20px;
 }
 .home-h1 {
     font-family: 'DM Sans', sans-serif !important;
-    font-size: 2.9rem !important; font-weight: 300 !important;
+    font-size: 2.8rem !important; font-weight: 300 !important;
     line-height: 1.1 !important; letter-spacing: -0.04em !important;
-    color: var(--txt) !important; margin-bottom: 8px !important;
+    color: var(--txt) !important; margin-bottom: 10px !important;
 }
 .home-h1 b { font-weight: 600; color: #fff; }
 .home-sub {
-    font-size: 0.9rem; color: var(--txt2);
-    line-height: 1.72; max-width: 420px;
-    margin-bottom: 48px; font-weight: 300;
+    font-size: 0.88rem; color: var(--txt2);
+    line-height: 1.72; max-width: 400px;
+    margin-bottom: 44px; font-weight: 300;
 }
-
 .tool-grid-border {
-    border: 1px solid var(--line2);
-    border-radius: 10px; overflow: hidden;
-    margin-bottom: 44px;
+    border: 1px solid var(--line2); border-radius: 10px;
+    overflow: hidden; margin-bottom: 40px;
 }
 .tool-grid { display: grid; grid-template-columns: 1fr 1fr; }
-
 .tcard {
-    background: var(--bg2);
-    padding: 26px 24px;
+    background: var(--bg2); padding: 24px 22px;
     transition: background 0.18s;
 }
 .tcard:nth-child(1) { border-right: 1px solid var(--line2); border-bottom: 1px solid var(--line2); }
 .tcard:nth-child(2) { border-bottom: 1px solid var(--line2); }
 .tcard:nth-child(3) { border-right: 1px solid var(--line2); }
 .tcard:hover { background: var(--bg3); }
-
 .tcard-num {
     font-family: 'DM Mono', monospace;
-    font-size: 0.58rem; color: var(--txt3); letter-spacing: 0.1em;
-    margin-bottom: 14px;
+    font-size: 0.56rem; color: var(--txt3); letter-spacing: 0.1em; margin-bottom: 12px;
 }
 .tcard-pill {
     display: inline-block;
     font-family: 'DM Mono', monospace;
-    font-size: 0.6rem; font-weight: 500; letter-spacing: 0.1em;
+    font-size: 0.58rem; font-weight: 500; letter-spacing: 0.1em;
     padding: 2px 7px; border-radius: 3px;
     border: 1px solid rgba(255,255,255,0.08);
-    background: rgba(255,255,255,0.03);
-    margin-bottom: 10px;
+    background: rgba(255,255,255,0.03); margin-bottom: 9px;
 }
 .tcard-name {
-    font-size: 0.92rem; font-weight: 600;
-    color: var(--txt); margin-bottom: 7px; letter-spacing: -0.01em;
+    font-size: 0.9rem; font-weight: 600;
+    color: var(--txt); margin-bottom: 6px; letter-spacing: -0.01em;
 }
-.tcard-desc { font-size: 0.76rem; color: var(--txt2); line-height: 1.6; font-weight: 300; }
-
+.tcard-desc { font-size: 0.74rem; color: var(--txt2); line-height: 1.6; font-weight: 300; }
 .home-foot-row {
     display: flex; align-items: center; justify-content: space-between;
-    border-top: 1px solid var(--line); padding-top: 18px;
+    border-top: 1px solid var(--line); padding-top: 16px;
 }
 .home-foot-txt {
     font-family: 'DM Mono', monospace;
-    font-size: 0.58rem; color: var(--txt3); letter-spacing: 0.08em;
+    font-size: 0.56rem; color: var(--txt3); letter-spacing: 0.08em;
 }
 
 /* hide invisible home nav buttons */
 [data-testid="stHorizontalBlock"] [data-testid="stVerticalBlock"] .stButton,
 [data-testid="stHorizontalBlock"] [data-testid="stVerticalBlock"] .stButton > button {
     display: none !important; height: 0 !important;
-    padding: 0 !important; margin: 0 !important; border: none !important;
+    padding: 0 !important; margin: 0 !important;
 }
 
-/* ─── TOOL TOP BAR ─── */
+/* ════════════════════════════════
+   TOOL TOPBAR
+════════════════════════════════ */
 .topbar {
     display: flex; align-items: flex-start; justify-content: space-between;
-    padding: 26px 0 18px;
+    padding: 24px 0 16px;
     border-bottom: 1px solid var(--line);
-    margin-bottom: 22px;
+    margin-bottom: 20px;
 }
-.topbar-left { display: flex; align-items: center; gap: 12px; }
+.topbar-left { display: flex; align-items: center; gap: 11px; }
 .topbar-pill {
     font-family: 'DM Mono', monospace;
-    font-size: 0.6rem; font-weight: 500; letter-spacing: 0.12em;
+    font-size: 0.58rem; font-weight: 500; letter-spacing: 0.12em;
     padding: 3px 8px; border-radius: 3px;
     border: 1px solid rgba(255,255,255,0.09);
-    background: rgba(255,255,255,0.03);
-    white-space: nowrap;
+    background: rgba(255,255,255,0.03); white-space: nowrap; flex-shrink: 0;
 }
-.topbar-title { font-size: 1.05rem; font-weight: 600; color: var(--txt); letter-spacing: -0.02em; }
-.topbar-desc { font-size: 0.73rem; color: var(--txt2); font-weight: 300; margin-top: 2px; }
+.topbar-title { font-size: 1rem; font-weight: 600; color: var(--txt); letter-spacing: -0.02em; }
+.topbar-desc { font-size: 0.72rem; color: var(--txt2); font-weight: 300; margin-top: 2px; }
 
+/* new chat button */
 .nc-wrap .stButton > button {
     all: unset !important;
     display: inline-flex !important; align-items: center !important;
     font-family: 'DM Mono', monospace !important;
-    font-size: 0.63rem !important; letter-spacing: 0.08em !important;
+    font-size: 0.61rem !important; letter-spacing: 0.08em !important;
     color: var(--txt3) !important;
     border: 1px solid var(--line2) !important;
     border-radius: var(--r) !important;
-    padding: 6px 12px !important;
-    cursor: pointer !important;
-    transition: border-color 0.15s, color 0.15s, background 0.15s !important;
-    white-space: nowrap !important;
+    padding: 6px 11px !important; cursor: pointer !important;
+    transition: all 0.15s !important; white-space: nowrap !important;
 }
 .nc-wrap .stButton > button:hover {
     border-color: rgba(255,255,255,0.2) !important;
-    color: var(--txt) !important;
-    background: var(--bg3) !important;
+    color: var(--txt) !important; background: var(--bg3) !important;
 }
 
-/* ─── CHAT ─── */
+/* ════════════════════════════════
+   CHAT MESSAGES
+════════════════════════════════ */
 .stChatMessage {
     background: transparent !important; border: none !important;
     padding: 3px 0 !important; gap: 12px !important;
@@ -323,16 +412,16 @@ div[data-testid="stChatMessageUser"] > div[data-testid="stChatMessageContent"] {
     background: var(--bg3) !important;
     border: 1px solid var(--line2) !important;
     border-radius: 8px 8px 2px 8px !important;
-    padding: 10px 15px !important; max-width: 66% !important;
-    font-size: 0.862rem !important; line-height: 1.65 !important;
+    padding: 10px 14px !important; max-width: 66% !important;
+    font-size: 0.855rem !important; line-height: 1.65 !important;
     color: var(--txt) !important; box-shadow: none !important;
 }
 div[data-testid="stChatMessageAssistant"] > div[data-testid="stChatMessageContent"] {
     background: transparent !important;
     border: 1px solid var(--line) !important;
     border-radius: 8px 8px 8px 2px !important;
-    padding: 13px 17px !important; max-width: 80% !important;
-    font-size: 0.862rem !important; line-height: 1.72 !important;
+    padding: 12px 16px !important; max-width: 82% !important;
+    font-size: 0.855rem !important; line-height: 1.72 !important;
     color: rgba(215,220,235,0.88) !important; box-shadow: none !important;
 }
 div[data-testid="chatAvatarIcon-user"],
@@ -342,12 +431,78 @@ div[data-testid="chatAvatarIcon-assistant"] {
     border-radius: 5px !important; box-shadow: none !important;
 }
 
-/* ─── FILE UPLOADER ─── */
+/* ════════════════════════════════
+   FILE DOWNLOAD CARD
+════════════════════════════════ */
+.file-card {
+    background: var(--bg2);
+    border: 1px solid var(--line2);
+    border-radius: 8px;
+    padding: 16px 18px;
+    margin: 6px 0;
+}
+.file-card-header {
+    display: flex; align-items: center; gap: 10px; margin-bottom: 12px;
+}
+.file-card-icon {
+    width: 30px; height: 30px; border-radius: 5px;
+    background: rgba(200,255,87,0.08);
+    border: 1px solid rgba(200,255,87,0.18);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.75rem; color: var(--accent); flex-shrink: 0;
+    font-family: 'DM Mono', monospace; font-weight: 500; letter-spacing: 0.05em;
+}
+.file-card-meta { flex: 1; min-width: 0; }
+.file-card-name {
+    font-size: 0.82rem; font-weight: 600; color: var(--txt);
+    letter-spacing: -0.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.file-card-size {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.57rem; color: var(--txt3); letter-spacing: 0.06em; margin-top: 1px;
+}
+.file-card-preview {
+    background: var(--bg3);
+    border: 1px solid var(--line);
+    border-radius: 5px;
+    padding: 10px 12px;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.72rem; color: var(--txt2);
+    line-height: 1.6; white-space: pre-wrap; word-break: break-word;
+    max-height: 120px; overflow: hidden;
+    margin-bottom: 12px;
+    position: relative;
+}
+.file-card-preview::after {
+    content: '';
+    position: absolute; bottom: 0; left: 0; right: 0; height: 32px;
+    background: linear-gradient(transparent, var(--bg3));
+    border-radius: 0 0 5px 5px;
+}
+
+/* streamlit download button inside card */
+.file-card .stDownloadButton > button {
+    all: unset !important;
+    display: inline-flex !important; align-items: center !important; gap: 6px !important;
+    font-family: 'DM Mono', monospace !important;
+    font-size: 0.63rem !important; letter-spacing: 0.08em !important;
+    color: #0a0a0b !important;
+    background: var(--accent) !important;
+    border-radius: 5px !important;
+    padding: 7px 14px !important; cursor: pointer !important;
+    font-weight: 500 !important;
+    transition: opacity 0.15s !important;
+}
+.file-card .stDownloadButton > button:hover { opacity: 0.85 !important; }
+
+/* ════════════════════════════════
+   FILE UPLOADER
+════════════════════════════════ */
 div[data-testid="stFileUploader"] > div {
     background: var(--bg2) !important;
     border: 1px dashed var(--line2) !important;
     border-radius: var(--r) !important;
-    padding: 14px 18px !important;
+    padding: 12px 16px !important;
     transition: border-color 0.2s !important;
 }
 div[data-testid="stFileUploader"] > div:hover {
@@ -359,7 +514,9 @@ div[data-testid="stFileUploader"] small {
     font-family: 'DM Sans', sans-serif !important; font-size: 0.78rem !important;
 }
 
-/* ─── CHAT INPUT ─── */
+/* ════════════════════════════════
+   CHAT INPUT
+════════════════════════════════ */
 div[data-testid="stChatInput"] {
     background: var(--bg2) !important;
     border: 1px solid var(--line2) !important;
@@ -382,7 +539,9 @@ div[data-testid="stChatInput"] button {
 }
 div[data-testid="stChatInput"] button svg path { fill: #0a0a0b !important; }
 
-/* ─── ALERTS ─── */
+/* ════════════════════════════════
+   ALERTS
+════════════════════════════════ */
 div[data-testid="stAlert"] {
     background: rgba(200,255,87,0.04) !important;
     border: 1px solid rgba(200,255,87,0.14) !important;
@@ -391,9 +550,11 @@ div[data-testid="stAlert"] {
     font-family: 'DM Mono', monospace !important; font-size: 0.72rem !important;
 }
 
-/* ─── THINKING ─── */
+/* ════════════════════════════════
+   THINKING INDICATOR
+════════════════════════════════ */
 .thinking-row {
-    display: inline-flex; align-items: center; gap: 9px; padding: 8px 0;
+    display: inline-flex; align-items: center; gap: 9px; padding: 6px 0;
 }
 .t-dots { display: flex; gap: 4px; align-items: center; }
 .t-dots span {
@@ -409,7 +570,7 @@ div[data-testid="stAlert"] {
 }
 .t-label {
     font-family: 'DM Mono', monospace;
-    font-size: 0.62rem; color: var(--txt3);
+    font-size: 0.6rem; color: var(--txt3);
     text-transform: uppercase; letter-spacing: 0.14em;
 }
 </style>
@@ -424,10 +585,60 @@ for k, v in [
         st.session_state[k] = v
 
 def go_to_tool(name: str):
-    st.session_state.mode            = name
-    st.session_state.messages        = [{"role": "assistant", "content": "Hello! How can I help you today?"}]
+    st.session_state.mode               = name
+    st.session_state.messages           = [{"role": "assistant", "content": "[output-text]Hello! How can I help you today?[/output-text]"}]
     st.session_state.pending_ocr_text   = None
     st.session_state.uploaded_file_name = None
+
+# ── Render a single assistant message (parsed) ────────────────────────────────
+def render_assistant_message(raw: str, msg_index: int):
+    """Parse and render an assistant response with text bubbles + file cards."""
+    segments = parse_ai_response(raw)
+
+    if not segments:
+        # fallback: just show raw
+        st.markdown(raw)
+        return
+
+    for seg_i, seg in enumerate(segments):
+        if seg["type"] == "text":
+            st.markdown(seg["content"])
+
+        elif seg["type"] == "file":
+            ext     = seg["ext"]
+            content = seg["content"]
+            fname   = f"Spartan-Assignment.{ext}"
+            preview = content[:400]
+            size_kb = round(len(content.encode("utf-8")) / 1024, 1)
+
+            ext_labels = {"txt": "TXT", "md": "MD", "pdf": "PDF", "docx": "DOCX"}
+            icon_label = ext_labels.get(ext, ext.upper())
+
+            # Card header
+            st.markdown(f"""
+            <div class="file-card">
+                <div class="file-card-header">
+                    <div class="file-card-icon">{icon_label}</div>
+                    <div class="file-card-meta">
+                        <div class="file-card-name">{fname}</div>
+                        <div class="file-card-size">{size_kb} KB &nbsp;·&nbsp; ready to download</div>
+                    </div>
+                </div>
+                <div class="file-card-preview">{preview}</div>
+            </div>
+            """, unsafe_allow_html=True)
+
+            # Download button (outside the HTML card so Streamlit can render it)
+            file_bytes, mime = make_download_bytes(content, ext)
+            dl_key = f"dl_{msg_index}_{seg_i}_{ext}"
+            st.download_button(
+                label=f"↓  Download  {fname}",
+                data=file_bytes,
+                file_name=fname,
+                mime=mime,
+                key=dl_key,
+            )
+
 
 # ── SIDEBAR ───────────────────────────────────────────────────────────────────
 with st.sidebar:
@@ -435,11 +646,11 @@ with st.sidebar:
     <div class="sb-brand">
         <div class="sb-brand-row">
             <div class="sb-sq">
-                <svg viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <rect x="1" y="1" width="4" height="4" fill="#0a0a0b"/>
-                    <rect x="7" y="1" width="4" height="4" fill="#0a0a0b"/>
-                    <rect x="1" y="7" width="4" height="4" fill="#0a0a0b"/>
-                    <rect x="7" y="7" width="4" height="4" fill="#0a0a0b"/>
+                <svg viewBox="0 0 11 11" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <rect x="1" y="1" width="3.5" height="3.5" fill="#0a0a0b"/>
+                    <rect x="6.5" y="1" width="3.5" height="3.5" fill="#0a0a0b"/>
+                    <rect x="1" y="6.5" width="3.5" height="3.5" fill="#0a0a0b"/>
+                    <rect x="6.5" y="6.5" width="3.5" height="3.5" fill="#0a0a0b"/>
                 </svg>
             </div>
             <span class="sb-name">Spartan AI</span>
@@ -449,16 +660,17 @@ with st.sidebar:
     """, unsafe_allow_html=True)
 
     if st.button("Home", key="sb_home"):
-        st.session_state.mode            = "Home"
-        st.session_state.messages        = []
+        st.session_state.mode               = "Home"
+        st.session_state.messages           = []
         st.session_state.pending_ocr_text   = None
         st.session_state.uploaded_file_name = None
         st.rerun()
 
     st.markdown('<div class="sb-section">Tools</div>', unsafe_allow_html=True)
 
-    for tool_name, meta in TOOL_META.items():
-        if st.button(f"{meta['index']}  {tool_name}", key=f"sb_{tool_name}"):
+    for tool_name, tmeta in TOOL_META.items():
+        label = f"{tmeta['index']}  {tool_name}"
+        if st.button(label, key=f"sb_{tool_name}"):
             go_to_tool(tool_name)
             st.rerun()
 
@@ -473,30 +685,30 @@ with st.sidebar:
 # HOME
 # ══════════════════════════════════════════════════════════════════════════════
 if st.session_state.mode == "Home":
-
     st.markdown("""
     <div class="home-wrap">
         <div class="home-badge">Senior Project &nbsp;·&nbsp; 2025</div>
         <h1 class="home-h1">The classroom,<br><b>intelligently assisted.</b></h1>
         <p class="home-sub">
-            Four focused AI tools for educators and students — built for speed, transparency, and trust.
+            Four focused AI tools for educators and students —
+            built for speed, transparency, and trust.
         </p>
     </div>
     """, unsafe_allow_html=True)
 
     st.markdown('<div class="tool-grid-border"><div class="tool-grid">', unsafe_allow_html=True)
-    for name, meta in TOOL_META.items():
+    for name, tmeta in TOOL_META.items():
         st.markdown(f"""
         <div class="tcard">
-            <div class="tcard-num">{meta['index']}</div>
-            <div class="tcard-pill" style="color:{meta['color']};">{meta['tag']}</div>
+            <div class="tcard-num">{tmeta['index']}</div>
+            <div class="tcard-pill" style="color:{tmeta['color']};">{tmeta['tag']}</div>
             <div class="tcard-name">{name}</div>
-            <div class="tcard-desc">{meta['desc']}</div>
+            <div class="tcard-desc">{tmeta['desc']}</div>
         </div>
         """, unsafe_allow_html=True)
     st.markdown('</div></div>', unsafe_allow_html=True)
 
-    # invisible nav buttons (hidden by CSS)
+    # hidden nav buttons (CSS kills them; kept so rerun can fire)
     col1, col2 = st.columns(2)
     for idx, (name, _) in enumerate(TOOL_META.items()):
         with (col1 if idx % 2 == 0 else col2):
@@ -517,35 +729,36 @@ if st.session_state.mode == "Home":
 # ══════════════════════════════════════════════════════════════════════════════
 tool  = st.session_state.mode
 model = MODEL_MAP[tool]
-meta  = TOOL_META[tool]
+tmeta = TOOL_META[tool]
 
 col_hdr, col_btn = st.columns([5, 1])
 with col_hdr:
     st.markdown(f"""
     <div class="topbar">
         <div class="topbar-left">
-            <div class="topbar-pill" style="color:{meta['color']};">{meta['tag']}</div>
+            <div class="topbar-pill" style="color:{tmeta['color']};">{tmeta['tag']}</div>
             <div>
                 <div class="topbar-title">{tool}</div>
-                <div class="topbar-desc">{meta['desc']}</div>
+                <div class="topbar-desc">{tmeta['desc']}</div>
             </div>
         </div>
     </div>
     """, unsafe_allow_html=True)
 
 with col_btn:
-    st.markdown('<div class="nc-wrap" style="padding-top:26px; display:flex; justify-content:flex-end;">', unsafe_allow_html=True)
+    st.markdown('<div class="nc-wrap" style="padding-top:24px; display:flex; justify-content:flex-end;">', unsafe_allow_html=True)
     if st.button("+ new chat", key="new_chat"):
-        st.session_state.messages            = [{"role": "assistant", "content": "Hello! How can I help you today?"}]
-        st.session_state.pending_ocr_text    = None
-        st.session_state.uploaded_file_name  = None
+        go_to_tool(tool)
         st.rerun()
     st.markdown('</div>', unsafe_allow_html=True)
 
 # ── Chat history ──────────────────────────────────────────────────────────────
-for msg in st.session_state.messages:
+for i, msg in enumerate(st.session_state.messages):
     with st.chat_message(msg["role"]):
-        st.markdown(msg.get("display_text", msg["content"]))
+        if msg["role"] == "assistant":
+            render_assistant_message(msg["content"], i)
+        else:
+            st.markdown(msg.get("display_text", msg["content"]))
 
 # ── File uploader ─────────────────────────────────────────────────────────────
 uploaded_file = st.file_uploader(
@@ -596,20 +809,25 @@ if uploaded_file is not None and uploaded_file.name != st.session_state.uploaded
 user_input = st.chat_input("Message Spartan AI…")
 
 if user_input:
+    # Build content sent to the model
     ocr_text = st.session_state.pending_ocr_text
     if ocr_text:
-        content = f"uploaded-file-text{{{ocr_text}}}\nuser-query{{{user_input}}}"
+        # Use the spec format for image/file input
+        api_content = f"[input-image-text]{ocr_text}[/input-image-text]\n[output-text]{user_input}[/output-text]"
         st.session_state.pending_ocr_text   = None
         st.session_state.uploaded_file_name = None
     else:
-        content = f"user-query{{{user_input}}}"
+        api_content = f"[output-text]{user_input}[/output-text]"
 
     st.session_state.messages.append({
-        "role": "user", "content": content, "display_text": user_input,
+        "role":         "user",
+        "content":      api_content,
+        "display_text": user_input,
     })
     with st.chat_message("user"):
         st.markdown(user_input)
 
+    # ── Stream assistant response ─────────────────────────────────────────────
     full_response = ""
 
     with st.chat_message("assistant"):
@@ -649,16 +867,22 @@ if user_input:
                         if first_token:
                             thinking_slot.empty()
                             first_token = False
-                        resp_slot.markdown(full_response + "▌", unsafe_allow_html=True)
+                        # Show streaming text — strip tags for live preview
+                        live = OUTPUT_TEXT_RE.sub(r'\1', full_response)
+                        live = OUTPUT_FILE_RE.sub('[file generating…]', live)
+                        resp_slot.markdown(live.strip() + "▌", unsafe_allow_html=True)
                         time.sleep(0.01)
-                resp_slot.markdown(full_response)
+
+                # Final render: fully parsed
                 thinking_slot.empty()
+                resp_slot.empty()
+                render_assistant_message(full_response, len(st.session_state.messages))
 
         except Exception:
             thinking_slot.empty()
             full_response = ""
             resp_slot.markdown(
-                "<span style='font-family:DM Mono,monospace;font-size:0.72rem;"
+                "<span style='font-family:DM Mono,monospace;font-size:0.7rem;"
                 "color:rgba(255,90,70,0.7);'>"
                 "⚠  Server unreachable — please try again."
                 "</span>",
@@ -667,7 +891,7 @@ if user_input:
 
     if full_response:
         st.session_state.messages.append({
-            "role": "assistant",
-            "content": full_response,
+            "role":         "assistant",
+            "content":      full_response,
             "display_text": full_response,
         })
