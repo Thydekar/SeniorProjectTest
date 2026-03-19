@@ -276,11 +276,17 @@ div[data-testid="stSidebar"] .stButton > button:hover {
 }
 
 .sb-foot {
-    position: absolute; bottom: 0; left: 0; right: 0;
-    padding: 12px 16px;
+    padding: 12px 16px 16px;
     border-top: 1px solid var(--line);
     font-family: 'DM Mono', monospace;
     font-size: 0.54rem; color: var(--txt3); line-height: 1.9;
+}
+/* add bottom breathing room above footer so last button never overlaps */
+div[data-testid="stSidebar"] .stButton {
+    margin-bottom: 0 !important;
+}
+div[data-testid="stSidebar"] > div > div {
+    padding-bottom: 70px !important;
 }
 
 /* ════════════════════════════════
@@ -494,6 +500,42 @@ div[data-testid="chatAvatarIcon-assistant"] {
     transition: opacity 0.15s !important;
 }
 .file-card .stDownloadButton > button:hover { opacity: 0.85 !important; }
+
+/* ════════════════════════════════
+   FILE GENERATING CARD (streaming)
+════════════════════════════════ */
+.file-gen-card {
+    background: var(--bg2);
+    border: 1px solid rgba(200,255,87,0.18);
+    border-radius: 8px;
+    padding: 14px 16px;
+    display: flex; align-items: center; gap: 12px;
+    margin: 6px 0;
+}
+.file-gen-icon {
+    width: 32px; height: 32px; border-radius: 5px; flex-shrink: 0;
+    background: rgba(200,255,87,0.08);
+    border: 1px solid rgba(200,255,87,0.2);
+    display: flex; align-items: center; justify-content: center;
+}
+.file-gen-icon svg { width: 14px; height: 14px; }
+.file-gen-text { flex: 1; }
+.file-gen-title {
+    font-size: 0.8rem; font-weight: 600; color: var(--txt);
+    letter-spacing: -0.01em; margin-bottom: 3px;
+}
+.file-gen-sub {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.58rem; color: var(--accent); letter-spacing: 0.06em;
+}
+.file-gen-dots { display: flex; gap: 3px; align-items: center; }
+.file-gen-dots span {
+    display: block; width: 3px; height: 3px; border-radius: 50%;
+    background: var(--accent);
+    animation: tblink 1.1s ease-in-out infinite both;
+}
+.file-gen-dots span:nth-child(2) { animation-delay: 0.18s; }
+.file-gen-dots span:nth-child(3) { animation-delay: 0.36s; }
 
 /* ════════════════════════════════
    FILE UPLOADER
@@ -850,6 +892,29 @@ if user_input:
                 ],
                 "stream": True,
             }
+
+            FILE_OPEN_RE = re.compile(r'\[output-file-(txt|md|pdf|docx)\]')
+            FILE_GEN_HTML = """
+            <div class="file-gen-card">
+                <div class="file-gen-icon">
+                    <svg viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M2 1h7l3 3v9H2V1z" stroke="#c8ff57" stroke-width="1" stroke-linejoin="round"/>
+                        <path d="M9 1v3h3" stroke="#c8ff57" stroke-width="1" stroke-linejoin="round"/>
+                        <path d="M4 7h6M4 9.5h4" stroke="#c8ff57" stroke-width="0.9" stroke-linecap="round"/>
+                    </svg>
+                </div>
+                <div class="file-gen-text">
+                    <div class="file-gen-title">Generating file…</div>
+                    <div class="file-gen-sub" style="display:flex;align-items:center;gap:6px;">
+                        Spartan AI is writing your assignment
+                        <div class="file-gen-dots"><span></span><span></span><span></span></div>
+                    </div>
+                </div>
+            </div>
+            """
+
+            generating_shown = False  # have we switched to the file card yet?
+
             with requests.post(
                 OLLAMA_CHAT_URL,
                 json=payload,
@@ -867,15 +932,32 @@ if user_input:
                         if first_token:
                             thinking_slot.empty()
                             first_token = False
-                        # Show streaming text — strip tags for live preview
-                        live = OUTPUT_TEXT_RE.sub(r'\1', full_response)
-                        live = OUTPUT_FILE_RE.sub('[file generating…]', live)
-                        resp_slot.markdown(live.strip() + "▌", unsafe_allow_html=True)
+
+                        if not generating_shown:
+                            if FILE_OPEN_RE.search(full_response):
+                                # Opening file tag detected — switch to generating card
+                                generating_shown = True
+                                # Extract any [output-text] content before the tag
+                                pre_text = OUTPUT_TEXT_RE.sub(r'\1', full_response[:FILE_OPEN_RE.search(full_response).start()]).strip()
+                                resp_slot.empty()
+                                if pre_text:
+                                    resp_slot.markdown(pre_text)
+                                # New slot for the generating card
+                                gen_slot = st.empty()
+                                gen_slot.markdown(FILE_GEN_HTML, unsafe_allow_html=True)
+                            else:
+                                # Normal text streaming
+                                live = OUTPUT_TEXT_RE.sub(r'\1', full_response).strip()
+                                if live:
+                                    resp_slot.markdown(live + "▌", unsafe_allow_html=True)
+                        # While generating_shown, we just accumulate — card stays up
                         time.sleep(0.01)
 
-                # Final render: fully parsed
+                # Stream complete — do final parse render
                 thinking_slot.empty()
                 resp_slot.empty()
+                if generating_shown:
+                    gen_slot.empty()
                 render_assistant_message(full_response, len(st.session_state.messages))
 
         except Exception:
