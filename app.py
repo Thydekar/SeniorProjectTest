@@ -893,7 +893,10 @@ if user_input:
                 "stream": True,
             }
 
-            FILE_OPEN_RE = re.compile(r'\[output-file-(txt|md|pdf|docx)\]')
+            # Detects ANY opening output tag as soon as it fully arrives
+            ANY_OPEN_RE  = re.compile(r'\[(output-text|output-file-(?:txt|md|pdf|docx))\]')
+            FILE_OPEN_RE = re.compile(r'\[output-file-(?:txt|md|pdf|docx)\]')
+
             FILE_GEN_HTML = """
             <div class="file-gen-card">
                 <div class="file-gen-icon">
@@ -913,7 +916,14 @@ if user_input:
             </div>
             """
 
-            generating_shown = False  # have we switched to the file card yet?
+            # ── streaming state machine ──────────────────────────────────────
+            # States:
+            #   "waiting"     — no tag seen yet, sitting on thinking indicator
+            #   "text"        — inside [output-text], streaming chars live
+            #   "file"        — inside [output-file-*], showing generating card
+            stream_state  = "waiting"
+            gen_slot      = None   # placeholder for file-gen card
+            active_slot   = resp_slot  # current text slot to write into
 
             with requests.post(
                 OLLAMA_CHAT_URL,
@@ -924,39 +934,67 @@ if user_input:
                 stream=True,
             ) as r:
                 r.raise_for_status()
-                first_token = True
-                for line in r.iter_lines():
-                    if line:
-                        token = json.loads(line).get("message", {}).get("content", "")
-                        full_response += token
-                        if first_token:
-                            thinking_slot.empty()
-                            first_token = False
 
-                        if not generating_shown:
-                            if FILE_OPEN_RE.search(full_response):
-                                # Opening file tag detected — switch to generating card
-                                generating_shown = True
-                                # Extract any [output-text] content before the tag
-                                pre_text = OUTPUT_TEXT_RE.sub(r'\1', full_response[:FILE_OPEN_RE.search(full_response).start()]).strip()
-                                resp_slot.empty()
+                for line in r.iter_lines():
+                    if not line:
+                        continue
+                    token = json.loads(line).get("message", {}).get("content", "")
+                    full_response += token
+
+                    # ── dismiss thinking indicator on first token ────────────
+                    if stream_state == "waiting":
+                        thinking_slot.empty()
+                        # Check whether a complete opening tag has arrived yet
+                        m = ANY_OPEN_RE.search(full_response)
+                        if m:
+                            tag_name = m.group(1)  # e.g. "output-text" or "output-file-md"
+                            if tag_name == "output-text":
+                                stream_state = "text"
+                                # Show whatever text content has arrived so far
+                                inner_so_far = full_response[m.end():]
+                                # Strip any partial/complete closing tag from live view
+                                live = re.sub(r'\[/output-text\].*', '', inner_so_far).strip()
+                                if live:
+                                    active_slot.markdown(live + "▌", unsafe_allow_html=True)
+                            else:
+                                # It's a file tag
+                                stream_state = "file"
+                                # If any [output-text] blocks came before, render them
+                                pre = full_response[:m.start()]
+                                pre_text = OUTPUT_TEXT_RE.sub(r'\1', pre).strip()
                                 if pre_text:
-                                    resp_slot.markdown(pre_text)
-                                # New slot for the generating card
+                                    active_slot.markdown(pre_text)
                                 gen_slot = st.empty()
                                 gen_slot.markdown(FILE_GEN_HTML, unsafe_allow_html=True)
-                            else:
-                                # Normal text streaming
-                                live = OUTPUT_TEXT_RE.sub(r'\1', full_response).strip()
-                                if live:
-                                    resp_slot.markdown(live + "▌", unsafe_allow_html=True)
-                        # While generating_shown, we just accumulate — card stays up
-                        time.sleep(0.01)
 
-                # Stream complete — do final parse render
+                    elif stream_state == "text":
+                        # Extract the growing inner content of the current [output-text] block
+                        m = re.search(r'\[output-text\](.*?)(?=\[/output-text\]|\[output-file-)', full_response, re.DOTALL)
+                        if m:
+                            live = m.group(1).strip()
+                        else:
+                            # Tag not fully closed yet — show everything after the opening tag
+                            start = full_response.rfind('[output-text]')
+                            live  = full_response[start + len('[output-text]'):].strip()
+                            # Hide partial closing tag chars that are mid-arrival
+                            live  = re.sub(r'\[/?$|\[/output', '', live)
+
+                        active_slot.markdown(live + "▌", unsafe_allow_html=True)
+
+                        # Did a file tag open after this text block?
+                        if FILE_OPEN_RE.search(full_response):
+                            stream_state = "file"
+                            active_slot.markdown(live)   # finalise text without cursor
+                            gen_slot = st.empty()
+                            gen_slot.markdown(FILE_GEN_HTML, unsafe_allow_html=True)
+
+                    # state == "file": just accumulate, card stays up
+                    time.sleep(0.01)
+
+                # ── stream finished — full parse render ──────────────────────
                 thinking_slot.empty()
                 resp_slot.empty()
-                if generating_shown:
+                if gen_slot:
                     gen_slot.empty()
                 render_assistant_message(full_response, len(st.session_state.messages))
 
