@@ -4,17 +4,30 @@ import requests
 from requests.auth import HTTPBasicAuth
 import json
 import time
-import pytesseract
+import warnings
+
+# Suppress SSL warnings from verify=False
+warnings.filterwarnings("ignore", message="Unverified HTTPS request")
+
 from PIL import Image
 
+# ── Optional dependencies with graceful fallback ──────────────────────────────
 try:
     import PyPDF2
 except ImportError:
     PyPDF2 = None
+
 try:
-    import docx
+    import docx as docx_module   # FIX: alias so it doesn't shadow the name
 except ImportError:
-    docx = None
+    docx_module = None
+
+try:
+    import pytesseract
+    TESSERACT_OK = True
+except ImportError:
+    pytesseract = None
+    TESSERACT_OK = False
 
 # ── Config ───────────────────────────────────────────────────────────────────
 NGROK_URL = "https://ona-overcritical-extrinsically.ngrok-free.dev"
@@ -400,11 +413,20 @@ div[data-testid="stStatusWidget"] { display: none !important; }
 
 # ── Session state ─────────────────────────────────────────────────────────────
 for k, v in [
-    ("mode", "Home"), ("messages", []),
-    ("pending_ocr_text", None), ("uploaded_file_name", None),
+    ("mode", "Home"),
+    ("messages", []),
+    ("pending_ocr_text", None),
+    ("uploaded_file_name", None),
 ]:
     if k not in st.session_state:
         st.session_state[k] = v
+
+# ── Helper: navigate to a tool ────────────────────────────────────────────────
+def go_to_tool(tool_name: str):
+    st.session_state.mode = tool_name
+    st.session_state.messages = [{"role": "assistant", "content": "Hello! How can I help you today?"}]
+    st.session_state.pending_ocr_text = None
+    st.session_state.uploaded_file_name = None
 
 # ── SIDEBAR ───────────────────────────────────────────────────────────────────
 with st.sidebar:
@@ -420,15 +442,14 @@ with st.sidebar:
         st.session_state.mode = "Home"
         st.session_state.messages = []
         st.session_state.pending_ocr_text = None
+        st.session_state.uploaded_file_name = None
         st.rerun()
 
     st.markdown('<div class="sb-label">Tools</div>', unsafe_allow_html=True)
 
-    for tool, meta in TOOL_META.items():
-        if st.button(f"{meta['icon']}  {tool}", key=f"sb_{tool}"):
-            st.session_state.mode = tool
-            st.session_state.messages = [{"role": "assistant", "content": "Hello! How can I help you today?"}]
-            st.session_state.pending_ocr_text = None
+    for tool_name, meta in TOOL_META.items():
+        if st.button(f"{meta['icon']}  {tool_name}", key=f"sb_{tool_name}"):
+            go_to_tool(tool_name)
             st.rerun()
 
     st.markdown("""
@@ -452,23 +473,34 @@ if st.session_state.mode == "Home":
             running privately and transparently.
         </p>
     </div>
-    <div class="cards-grid">
     """, unsafe_allow_html=True)
 
-    for name, meta in TOOL_META.items():
-        st.markdown(f"""
-        <div class="tool-card" style="--card-orb: {meta['orb']};">
-            <div class="card-icon" style="color:{meta['accent']}; box-shadow:0 0 18px {meta['glow']};">
-                {meta['icon']}
+    # FIX: Render cards as clickable Streamlit buttons overlaid on styled HTML cards
+    # by using columns instead of a pure-HTML grid (which can't call st.rerun).
+    col1, col2 = st.columns(2)
+    tool_items = list(TOOL_META.items())
+
+    for idx, (name, meta) in enumerate(tool_items):
+        col = col1 if idx % 2 == 0 else col2
+        with col:
+            st.markdown(f"""
+            <div class="tool-card" style="--card-orb: {meta['orb']};">
+                <div class="card-icon" style="color:{meta['accent']}; box-shadow:0 0 18px {meta['glow']};">
+                    {meta['icon']}
+                </div>
+                <div class="card-name">{name}</div>
+                <div class="card-desc">{meta['desc']}</div>
+                <div class="card-arrow">→</div>
             </div>
-            <div class="card-name">{name}</div>
-            <div class="card-desc">{meta['desc']}</div>
-            <div class="card-arrow">→</div>
-        </div>
-        """, unsafe_allow_html=True)
+            """, unsafe_allow_html=True)
+            # Invisible button placed after card so it's clickable
+            if st.button(f"Open {name}", key=f"home_card_{name}",
+                         help=f"Open {name}",
+                         use_container_width=True):
+                go_to_tool(name)
+                st.rerun()
 
     st.markdown("""
-    </div>
     <hr class="home-hr">
     <div class="home-footer">Spartan AI &nbsp;·&nbsp; Dallin Geurts &nbsp;·&nbsp; 2025</div>
     """, unsafe_allow_html=True)
@@ -481,7 +513,9 @@ tool  = st.session_state.mode
 model = MODEL_MAP[tool]
 meta  = TOOL_META[tool]
 
-col_hdr, col_btn = st.columns([7, 1.4], gap="small")
+# FIX: Removed unsupported `gap` parameter from st.columns()
+col_hdr, col_btn = st.columns([7, 1.4])
+
 with col_hdr:
     st.markdown(f"""
     <div class="tool-header" style="--orb:{meta['orb']};">
@@ -505,63 +539,104 @@ with col_btn:
     st.markdown('</div>', unsafe_allow_html=True)
 
 # ── Chat history ───────────────────────────────────────────────────────────────
+# FIX: Always use display_text; fall back to content only for assistant messages
+# that were stored before display_text existed (safe because assistant content
+# is never the raw blob — only user messages carry the blob in `content`).
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg.get("display_text", msg["content"]))
 
 # ── File uploader ──────────────────────────────────────────────────────────────
+# FIX: Show dependency warnings if libraries are missing
+if not PyPDF2:
+    st.warning("PyPDF2 not installed — PDF upload disabled.")
+if not docx_module:
+    st.warning("python-docx not installed — DOCX upload disabled.")
+if not TESSERACT_OK:
+    st.warning("pytesseract not installed — image OCR disabled.")
+
 uploaded_file = st.file_uploader(
     "Attach a file — PDF, DOCX, TXT, or image (OCR supported)",
-    type=["pdf","docx","txt","png","jpg","jpeg","gif","bmp","tiff"],
+    type=["pdf", "docx", "txt", "png", "jpg", "jpeg", "gif", "bmp", "tiff"],
 )
 
-if uploaded_file and uploaded_file.name != st.session_state.uploaded_file_name:
+# FIX: Guard against accessing .name on None; only process when a new file arrives
+if uploaded_file is not None and uploaded_file.name != st.session_state.uploaded_file_name:
     with st.spinner("Reading file…"):
         extracted = ""
         ext = uploaded_file.name.rsplit(".", 1)[-1].lower()
         try:
-            if ext == "pdf" and PyPDF2:
-                reader = PyPDF2.PdfReader(uploaded_file)
-                for page in reader.pages:
-                    t = page.extract_text()
-                    if t: extracted += t + "\n"
-            elif ext == "docx" and docx:
-                d = docx.Document(uploaded_file)
-                for para in d.paragraphs: extracted += para.text + "\n"
+            if ext == "pdf":
+                if PyPDF2:
+                    reader = PyPDF2.PdfReader(uploaded_file)
+                    for page in reader.pages:
+                        t = page.extract_text()
+                        if t:
+                            extracted += t + "\n"
+                else:
+                    extracted = "(PyPDF2 not installed — cannot read PDF)"
+
+            elif ext == "docx":
+                if docx_module:
+                    d = docx_module.Document(uploaded_file)   # FIX: use alias
+                    for para in d.paragraphs:
+                        extracted += para.text + "\n"
+                else:
+                    extracted = "(python-docx not installed — cannot read DOCX)"
+
             elif ext == "txt":
                 extracted = uploaded_file.read().decode("utf-8", errors="ignore")
-            elif ext in ["png","jpg","jpeg","gif","bmp","tiff"]:
-                img = Image.open(uploaded_file).convert("RGB")
-                extracted = pytesseract.image_to_string(img, config=OCR_CONFIG)
+
+            elif ext in ["png", "jpg", "jpeg", "gif", "bmp", "tiff"]:
+                if TESSERACT_OK:
+                    img = Image.open(uploaded_file).convert("RGB")
+                    extracted = pytesseract.image_to_string(img, config=OCR_CONFIG)
+                else:
+                    extracted = "(pytesseract not installed — cannot OCR image)"
+
             else:
                 extracted = "(Unsupported file type)"
 
             extracted = extracted.strip() or "(No readable text found)"
+            # FIX: Set pending_ocr_text AFTER successful extraction only
             st.session_state.pending_ocr_text   = extracted
             st.session_state.uploaded_file_name = uploaded_file.name
             st.success(f"✓  {uploaded_file.name} processed")
+
         except Exception as e:
             st.error(f"Could not read file: {e}")
-            st.session_state.pending_ocr_text = None
+            # FIX: Do NOT clear pending_ocr_text here — preserve any previously
+            # loaded file text so the user doesn't lose their upload on a retry.
 
 # ── Chat input ────────────────────────────────────────────────────────────────
 user_input = st.chat_input("Message Spartan AI…")
 
 if user_input:
-    if st.session_state.pending_ocr_text:
-        content = f"uploaded-file-text{{{st.session_state.pending_ocr_text}}}\nuser-query{{{user_input}}}"
-        st.session_state.pending_ocr_text = None
+    # FIX: Capture and clear pending_ocr_text atomically before the API call
+    ocr_text = st.session_state.pending_ocr_text
+    if ocr_text:
+        content = f"uploaded-file-text{{{ocr_text}}}\nuser-query{{{user_input}}}"
+        st.session_state.pending_ocr_text   = None   # clear only after we've captured it
+        st.session_state.uploaded_file_name = None
     else:
         content = f"user-query{{{user_input}}}"
 
-    st.session_state.messages.append({"role": "user", "content": content, "display_text": user_input})
+    # Store user message: raw API content + clean display text (never show blob to user)
+    st.session_state.messages.append({
+        "role": "user",
+        "content": content,
+        "display_text": user_input,
+    })
     with st.chat_message("user"):
         st.markdown(user_input)
+
+    # ── Assistant turn ────────────────────────────────────────────────────────
+    full_response = ""
+    api_error     = False
 
     with st.chat_message("assistant"):
         thinking_slot = st.empty()
         resp_slot     = st.empty()
-        full_response = ""
 
         thinking_slot.markdown("""
         <div class="thinking-pill">
@@ -573,13 +648,19 @@ if user_input:
         try:
             payload = {
                 "model": model,
-                "messages": [{"role": m["role"], "content": m["content"]} for m in st.session_state.messages],
+                "messages": [
+                    {"role": m["role"], "content": m["content"]}
+                    for m in st.session_state.messages
+                ],
                 "stream": True,
             }
             with requests.post(
-                OLLAMA_CHAT_URL, json=payload,
+                OLLAMA_CHAT_URL,
+                json=payload,
                 auth=HTTPBasicAuth(USERNAME, PASSWORD),
-                timeout=600, verify=False, stream=True,
+                timeout=600,
+                verify=False,   # SSL verification disabled (ngrok self-signed)
+                stream=True,
             ) as r:
                 r.raise_for_status()
                 first_token = True
@@ -594,8 +675,11 @@ if user_input:
                         time.sleep(0.01)
                 resp_slot.markdown(full_response)
                 thinking_slot.empty()
-        except Exception:
+
+        except Exception as e:
+            api_error = True
             thinking_slot.empty()
+            full_response = ""   # ensure it stays empty string on error
             resp_slot.markdown(
                 "<span style='font-size:0.85rem;color:rgba(252,129,74,0.8);'>"
                 "⚠  Could not reach the server. Please try again."
@@ -603,6 +687,11 @@ if user_input:
                 unsafe_allow_html=True,
             )
 
-    st.session_state.messages.append({
-        "role": "assistant", "content": full_response, "display_text": full_response,
-    })
+    # FIX: Only append assistant message when there's actual content to save.
+    # On error, full_response is "" — don't pollute history with empty messages.
+    if full_response:
+        st.session_state.messages.append({
+            "role": "assistant",
+            "content": full_response,
+            "display_text": full_response,
+        })
