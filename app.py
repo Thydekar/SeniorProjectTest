@@ -63,7 +63,7 @@ TOOL_META = {
     },
 }
 
-# ── Helper functions (added so the app actually runs) ───────────────────────
+# ── Helper functions ───────────────────────────────────────────────────────────
 def model_online(model_name):
     try:
         r = requests.get(OLLAMA_TAGS_URL, auth=HTTPBasicAuth(USERNAME, PASSWORD), verify=False, timeout=5)
@@ -75,15 +75,12 @@ def model_online(model_name):
 
 def parse_response(raw):
     segs = []
-    # Extract output-text blocks
     text_matches = re.findall(r'\[output-text\](.*?)\[/output-text\]', raw, re.DOTALL)
     for match in text_matches:
         segs.append({"type": "text", "content": match.strip()})
-    # Extract output-file blocks
     file_matches = re.findall(r'\[output-file-(\w+)\](.*?)\[/output-file-\1\]', raw, re.DOTALL)
     for ext, content in file_matches:
         segs.append({"type": "file", "ext": ext, "content": content.strip()})
-    # Fallback if no tags
     if not segs and raw.strip():
         segs.append({"type": "text", "content": raw.strip()})
     return segs
@@ -99,208 +96,432 @@ def make_dl_bytes(content: str, ext: str):
 
 OUT_TEXT_RE = re.compile(r'\[output-text\](.*?)\[/output-text\]', re.DOTALL)
 
-# ── FULL CSS – Sleek blue developer theme with glassmorphism + grid background ──
+# ── ORIGINAL CSS (exactly as provided) + small FAB override for centered left/right buttons ──
 st.markdown("""
 <style>
-/* GLOBAL */
-.stApp {
-  background: #020d1c !important;
-  background-image: 
-    linear-gradient(rgba(59,130,246,0.06) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(59,130,246,0.06) 1px, transparent 1px) !important;
-  background-size: 48px 48px !important;
-  color: #e2e8f0 !important;
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap');
+:root {
+  --bg: #07090f;
+  --bg1: #0d1117;
+  --bg2: #111827;
+  --bg3: #1a2235;
+  --blue: #3b82f6;
+  --blue-d: #1d4ed8;
+  --blue-lo: rgba(59,130,246,0.08);
+  --blue-bd: rgba(59,130,246,0.25);
+  --cyan: #06b6d4;
+  --cyan-lo: rgba(6,182,212,0.08);
+  --cyan-bd: rgba(6,182,212,0.25);
+  --green: #10b981;
+  --red: #ef4444;
+  --txt: #e2e8f0;
+  --txt2: #94a3b8;
+  --txt3: #475569;
+  --bdr: rgba(255,255,255,0.06);
+  --bdr2: rgba(59,130,246,0.18);
+  --radius: 10px;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+html,body,[class*="css"],.stApp{
+  background:var(--bg)!important;
+  font-family:'Inter',sans-serif!important;
+  color:var(--txt)!important;
+  -webkit-font-smoothing:antialiased!important;
+}
+.stApp{
+  background:
+    radial-gradient(ellipse 60% 40% at 50% -10%,rgba(59,130,246,0.06) 0%,transparent 60%),
+    var(--bg)!important;
+}
+::-webkit-scrollbar{width:4px;}
+::-webkit-scrollbar-track{background:transparent;}
+::-webkit-scrollbar-thumb{background:rgba(59,130,246,0.3);border-radius:4px;}
+#MainMenu,footer,header,
+div[data-testid="stDecoration"],
+div[data-testid="stStatusWidget"],
+.stDeployButton{display:none!important;}
+/* ── HIDE SIDEBAR ── */
+section[data-testid="stSidebar"]{display:none!important;}
+.stAppHeader{display:none!important;}
+/* ── APP SHELL ── */
+.stApp > div[data-testid="stAppViewContainer"]{
+  padding-top:0!important;
+}
+.main .block-container{
+  max-width:100%!important;
+  padding:0!important;
+}
+/* ── TOP NAV ── */
+.spartan-nav{
+  position:fixed;top:0;left:0;right:0;
+  height:52px;
+  background:rgba(7,9,15,0.92);
+  backdrop-filter:blur(20px);
+  -webkit-backdrop-filter:blur(20px);
+  border-bottom:1px solid var(--bdr);
+  display:flex;align-items:center;
+  padding:0 24px;
+  z-index:1000;
+  gap:0;
+}
+.spartan-logo{
+  display:flex;align-items:center;gap:10px;
+  margin-right:32px;flex-shrink:0;
+}
+.spartan-logo-mark{
+  width:28px;height:28px;border-radius:7px;
+  background:linear-gradient(135deg,var(--blue),var(--cyan));
+  display:flex;align-items:center;justify-content:center;
+  font-family:'JetBrains Mono',monospace;font-size:0.7rem;font-weight:700;
+  color:#fff;
+  box-shadow:0 0 12px rgba(59,130,246,0.35);
+}
+.spartan-logo-text{
+  font-size:0.9rem;font-weight:600;color:var(--txt);letter-spacing:-0.01em;
+}
+.spartan-logo-ver{
+  font-family:'JetBrains Mono',monospace;font-size:0.5rem;
+  color:var(--txt3);letter-spacing:0.1em;margin-top:1px;
+}
+.nav-items{display:flex;align-items:center;gap:2px;flex:1;}
+.nav-item{
+  padding:6px 12px;border-radius:6px;
+  font-size:0.78rem;font-weight:500;color:var(--txt2);
+  cursor:pointer;transition:all 0.15s;white-space:nowrap;
+  border:1px solid transparent;
+  font-family:'Inter',sans-serif;
+  background:none;
+}
+.nav-item:hover{color:var(--txt);background:rgba(255,255,255,0.05);}
+.nav-item.active{
+  color:var(--blue);
+  background:rgba(59,130,246,0.1);
+  border-color:var(--blue-bd);
+}
+.nav-right{
+  display:flex;align-items:center;gap:8px;margin-left:auto;flex-shrink:0;
+}
+.nav-status{
+  display:flex;align-items:center;gap:6px;
+  font-family:'JetBrains Mono',monospace;font-size:0.55rem;
+  color:var(--txt3);letter-spacing:0.1em;text-transform:uppercase;
+  padding:4px 10px;border-radius:20px;
+  border:1px solid var(--bdr);
+}
+.nav-dot{
+  width:5px;height:5px;border-radius:50%;
+  background:var(--green);box-shadow:0 0 6px var(--green);
+  animation:pulse 2.5s ease-in-out infinite;
+}
+@keyframes pulse{0%,100%{opacity:1;}50%{opacity:0.3;}}
+/* ── PAGE WRAPPER ── */
+.page-wrap{
+  padding-top:52px;
+  min-height:100vh;
+}
+/* ── HOME PAGE ── */
+.home-hero{
+  max-width:800px;margin:0 auto;
+  padding:80px 32px 48px;
+  text-align:center;
+}
+.home-eyebrow{
+  font-family:'JetBrains Mono',monospace;font-size:0.6rem;
+  letter-spacing:0.3em;text-transform:uppercase;color:var(--blue);
+  opacity:0.8;margin-bottom:20px;
+}
+.home-title{
+  font-size:clamp(2.2rem,5vw,3.4rem);font-weight:700;
+  line-height:1.1;letter-spacing:-0.03em;color:var(--txt);
+  margin-bottom:18px;
+}
+.home-title span{
+  background:linear-gradient(135deg,var(--blue),var(--cyan));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+}
+.home-sub{
+  font-size:1rem;color:var(--txt2);line-height:1.7;
+  max-width:480px;margin:0 auto 56px;font-weight:300;
+}
+.module-grid{
+  display:grid;grid-template-columns:repeat(2,1fr);gap:12px;
+  max-width:800px;margin:0 auto;padding:0 32px 80px;
+}
+.module-card{
+  background:var(--bg1);border:1px solid var(--bdr);border-radius:var(--radius);
+  padding:24px;cursor:pointer;transition:all 0.2s;
+  position:relative;overflow:hidden;text-align:left;
+}
+.module-card::before{
+  content:'';position:absolute;top:0;left:0;right:0;height:2px;
+  background:linear-gradient(90deg,currentColor,transparent);opacity:0;
+  transition:opacity 0.2s;
+}
+.module-card:hover{
+  background:var(--bg2);border-color:var(--blue-bd);
+  transform:translateY(-2px);box-shadow:0 8px 32px rgba(0,0,0,0.3);
+}
+.module-card:hover::before{opacity:1;}
+.mc-tag{
+  display:inline-flex;align-items:center;gap:5px;
+  font-family:'JetBrains Mono',monospace;font-size:0.55rem;
+  font-weight:700;letter-spacing:0.12em;
+  padding:3px 8px;border-radius:4px;border:1px solid currentColor;
+  margin-bottom:14px;opacity:0.75;
+}
+.mc-tag::before{content:'';width:4px;height:4px;border-radius:50%;background:currentColor;}
+.mc-name{font-size:1rem;font-weight:600;color:var(--txt);margin-bottom:8px;letter-spacing:-0.01em;}
+.mc-desc{font-size:0.78rem;color:var(--txt2);line-height:1.6;font-weight:300;}
+.mc-icon{position:absolute;right:18px;bottom:14px;font-size:2rem;opacity:0.04;color:currentColor;}
+/* ── TOOL LAYOUT ── */
+.tool-layout{
+  display:flex;height:calc(100vh - 52px);
+}
+/* ── CHAT PANEL ── */
+.chat-panel{
+  flex:1;display:flex;flex-direction:column;
+  overflow:hidden;
+}
+.chat-header{
+  padding:20px 32px 16px;
+  border-bottom:1px solid var(--bdr);
+  background:rgba(7,9,15,0.8);
+  backdrop-filter:blur(10px);
+  flex-shrink:0;
+  display:flex;align-items:center;justify-content:space-between;
+}
+.ch-left{display:flex;align-items:center;gap:14px;}
+.ch-badge{
+  font-family:'JetBrains Mono',monospace;font-size:0.55rem;font-weight:700;
+  letter-spacing:0.1em;padding:4px 9px;border-radius:4px;
+  border:1px solid currentColor;opacity:0.8;flex-shrink:0;
+}
+.ch-name{font-size:1rem;font-weight:600;color:var(--txt);letter-spacing:-0.015em;}
+.ch-desc{font-size:0.73rem;color:var(--txt3);margin-top:2px;}
+.ch-status{
+  display:flex;align-items:center;gap:6px;
+  font-family:'JetBrains Mono',monospace;font-size:0.52rem;
+  letter-spacing:0.12em;text-transform:uppercase;flex-shrink:0;
+}
+.ch-status.online{color:var(--green);}
+.ch-status.offline{color:var(--red);}
+.ch-status-dot{width:5px;height:5px;border-radius:50%;}
+.ch-status.online .ch-status-dot{background:var(--green);box-shadow:0 0 5px var(--green);animation:pulse 2.5s ease-in-out infinite;}
+.ch-status.offline .ch-status-dot{background:var(--red);box-shadow:0 0 4px rgba(239,68,68,0.4);}
+/* ── MESSAGES ── */
+.chat-messages{
+  flex:1;overflow-y:auto;
+  padding:24px 32px;
+  display:flex;flex-direction:column;gap:16px;
+  padding-bottom:100px;
+}
+.stChatMessage{background:transparent!important;border:none!important;padding:4px 0!important;}
+div[data-testid="chatAvatarIcon-assistant"]{
+  width:28px!important;height:28px!important;
+  border-radius:7px!important;overflow:hidden!important;flex-shrink:0!important;
+  border:1px solid rgba(59,130,246,0.3)!important;
+  background-size:cover!important;background-position:center!important;
+  background-repeat:no-repeat!important;
+}
+div[data-testid="chatAvatarIcon-assistant"] > *{display:none!important;}
+div[data-testid="chatAvatarIcon-user"]{
+  width:28px!important;height:28px!important;
+  border-radius:7px!important;overflow:hidden!important;flex-shrink:0!important;
+  border:1px solid rgba(239,68,68,0.3)!important;
+  background-size:cover!important;background-position:center!important;
+  background-repeat:no-repeat!important;
+}
+div[data-testid="chatAvatarIcon-user"] > *{display:none!important;}
+div[data-testid="stChatMessageUser"]{flex-direction:row-reverse!important;}
+div[data-testid="stChatMessageUser"] > div[data-testid="stChatMessageContent"]{
+  background:rgba(59,130,246,0.07)!important;
+  border:1px solid rgba(59,130,246,0.18)!important;
+  border-radius:12px 3px 12px 12px!important;
+  padding:11px 15px!important;max-width:72%!important;
+  font-size:0.87rem!important;line-height:1.7!important;
+  box-shadow:none!important;
+}
+div[data-testid="stChatMessageAssistant"] > div[data-testid="stChatMessageContent"]{
+  background:var(--bg1)!important;
+  border:1px solid var(--bdr)!important;
+  border-left:2px solid var(--cyan)!important;
+  border-radius:3px 12px 12px 12px!important;
+  padding:12px 16px!important;max-width:88%!important;
+  font-size:0.87rem!important;line-height:1.75!important;
+  box-shadow:none!important;
+}
+/* ── BOTTOM INPUT ZONE ── */
+div[data-testid="stBottom"]{
+  position:fixed!important;
+  bottom:0!important;left:0!important;right:0!important;
+  z-index:500!important;
+  background:linear-gradient(to top,#07090f 55%,transparent)!important;
+  padding:8px 32px 16px 32px!important;
+  pointer-events:none!important;
+}
+div[data-testid="stBottom"] > div{
+  max-width:900px!important;margin:0 auto!important;
+  pointer-events:all!important;
+}
+div[data-testid="stChatInput"]{
+  background:var(--bg1)!important;
+  border:1px solid var(--bdr2)!important;
+  border-radius:12px!important;
+  box-shadow:0 0 0 1px rgba(59,130,246,0.05),0 8px 32px rgba(0,0,0,0.4)!important;
+}
+div[data-testid="stChatInput"]:focus-within{
+  border-color:rgba(59,130,246,0.45)!important;
+  box-shadow:0 0 0 3px rgba(59,130,246,0.07),0 8px 32px rgba(0,0,0,0.4)!important;
+}
+div[data-testid="stChatInput"] textarea{
+  background:transparent!important;color:var(--txt)!important;
+  font-family:'Inter',sans-serif!important;font-size:0.87rem!important;
+  caret-color:var(--blue)!important;
+}
+div[data-testid="stChatInput"] textarea::placeholder{
+  color:var(--txt3)!important;font-size:0.82rem!important;
+}
+div[data-testid="stChatInput"] button{
+  background:var(--blue)!important;border:none!important;
+  border-radius:7px!important;width:28px!important;height:28px!important;
+  box-shadow:0 0 12px rgba(59,130,246,0.3)!important;
+  flex-shrink:0!important;margin:auto 6px auto 0!important;padding:0!important;
+}
+div[data-testid="stChatInput"] button svg path,
+div[data-testid="stChatInput"] button svg rect{fill:#fff!important;}
+
+/* ── FLOATING ACTION BUTTONS (overridden to sit directly left & right of centered input) ── */
+.fab-group{
+  position:fixed;bottom:32px;left:50%;transform:translateX(-50%);
+  z-index:600;
+  display:flex;gap:12px;
+  width:780px;max-width:calc(100% - 40px);
+  justify-content:space-between;
+  pointer-events:none;
+}
+.fab{
+  pointer-events:all;
+  width:48px;height:48px;
+  display:flex;align-items:center;justify-content:center;
+  background:var(--bg2);
+  border:1px solid var(--bdr2);border-radius:9999px;
+  font-size:1.4rem;color:var(--txt2);
+  cursor:pointer;transition:all 0.15s;
+  backdrop-filter:blur(12px);
+  box-shadow:0 8px 25px rgba(59,130,246,0.3);
+  user-select:none;
+}
+.fab:hover{
+  background:rgba(59,130,246,0.12);
+  border-color:var(--blue-bd);color:var(--blue);
+  box-shadow:0 4px 16px rgba(59,130,246,0.15);
+  transform:scale(1.08);
+}
+.fab.active{
+  background:rgba(59,130,246,0.15);
+  border-color:var(--blue);color:var(--blue);
 }
 
-/* Glassmorphism for all cards/nav */
-.spartan-nav, .module-card, .chat-header, .fcard, .fgen, .file-chip {
-  background: rgba(15,23,42,0.75) !important;
-  backdrop-filter: blur(20px) !important;
-  border: 1px solid rgba(59,130,246,0.35) !important;
-  box-shadow: 0 8px 32px -6px rgba(59,130,246,0.25),
-              0 0 0 1px rgba(255,255,255,0.08) inset !important;
+/* ── FILE ATTACH CHIP ── */
+.file-chip{
+  display:inline-flex;align-items:center;gap:8px;
+  background:rgba(59,130,246,0.06);border:1px solid var(--blue-bd);
+  border-radius:8px;padding:7px 12px;margin-bottom:12px;
+  font-size:0.78rem;
 }
-
-/* NAV */
-.spartan-nav {
-  position: sticky;
-  top: 0;
-  z-index: 1000;
-  border-bottom: 1px solid rgba(59,130,246,0.25) !important;
-  box-shadow: 0 4px 20px rgba(0,0,0,0.3) !important;
-  padding: 12px 24px !important;
-  display: flex;
-  align-items: center;
-  gap: 16px;
+.file-chip-icon{font-size:0.85rem;}
+.file-chip-name{color:var(--txt);font-weight:500;}
+.file-chip-type{
+  font-family:'JetBrains Mono',monospace;font-size:0.6rem;
+  color:var(--blue);letter-spacing:0.08em;text-transform:uppercase;
 }
-.spartan-logo {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-weight: 700;
-  font-size: 1.35rem;
-  color: #3b82f6;
+/* ── FILE DOWNLOAD CARD ── */
+.fcard{
+  background:var(--bg2);border:1px solid var(--bdr2);
+  border-left:2px solid var(--blue);border-radius:10px;
+  padding:16px 18px;margin:6px 0;
 }
-.nav-items {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
+.fcard-hd{display:flex;align-items:center;gap:10px;margin-bottom:10px;}
+.fcard-icon{
+  width:32px;height:32px;border-radius:6px;
+  background:rgba(59,130,246,0.08);border:1px solid var(--blue-bd);
+  display:flex;align-items:center;justify-content:center;
+  font-family:'JetBrains Mono',monospace;font-size:0.55rem;font-weight:700;color:var(--blue);
+  flex-shrink:0;
 }
-.nav-item {
-  background: rgba(15,23,42,0.6) !important;
-  border: 1px solid rgba(59,130,246,0.3) !important;
-  color: #e2e8f0 !important;
-  padding: 8px 16px !important;
-  border-radius: 9999px !important;
-  font-size: 0.95rem;
-  transition: all 0.2s;
+.fcard-name{font-size:0.82rem;font-weight:600;color:var(--txt);}
+.fcard-meta{font-family:'JetBrains Mono',monospace;font-size:0.5rem;color:var(--txt3);margin-top:2px;}
+.fcard-preview{
+  background:rgba(0,0,0,0.3);border:1px solid var(--bdr);border-radius:6px;
+  padding:8px 12px;margin-bottom:10px;
+  font-family:'JetBrains Mono',monospace;font-size:0.65rem;color:var(--txt2);
+  line-height:1.55;white-space:pre-wrap;word-break:break-word;
+  max-height:80px;overflow:hidden;position:relative;
 }
-.nav-item.active, .nav-item:hover {
-  background: rgba(59,130,246,0.2) !important;
-  border-color: #3b82f6 !important;
-  color: #3b82f6 !important;
+.fcard-preview::after{
+  content:'';position:absolute;bottom:0;left:0;right:0;height:24px;
+  background:linear-gradient(transparent,rgba(0,0,0,0.8));
 }
-
-/* HOME */
-.home-hero {
-  text-align: center;
-  padding: 60px 20px 40px;
+/* ── FILE GENERATING WIDGET ── */
+.fgen{
+  background:var(--bg2);border:1px solid rgba(6,182,212,0.25);
+  border-left:2px solid var(--cyan);border-radius:10px;
+  padding:14px 16px;display:flex;align-items:center;gap:12px;margin:6px 0;
 }
-.home-eyebrow { font-family: monospace; font-size: 0.95rem; color: #64748b; letter-spacing: 3px; }
-.home-title {
-  font-size: 3.2rem;
-  line-height: 1.1;
-  font-weight: 700;
-  margin: 12px 0;
+.fgen-icon{
+  width:32px;height:32px;border-radius:6px;flex-shrink:0;
+  background:rgba(6,182,212,0.08);border:1px solid rgba(6,182,212,0.25);
+  display:flex;align-items:center;justify-content:center;
 }
-.home-title span { color: #3b82f6; }
-.home-sub { font-size: 1.25rem; color: #94a3b8; max-width: 620px; margin: 0 auto; }
-
-.module-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 24px;
-  padding: 0 20px;
+.fgen-icon svg{width:14px;height:14px;}
+.fgen-title{font-size:0.8rem;font-weight:600;color:var(--txt);margin-bottom:4px;}
+.fgen-sub{
+  font-family:'JetBrains Mono',monospace;font-size:0.5rem;
+  color:var(--cyan);letter-spacing:0.08em;
+  display:flex;align-items:center;gap:6px;
 }
-.module-card {
-  border-radius: 16px;
-  padding: 24px;
-  cursor: pointer;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  position: relative;
-  overflow: hidden;
+.fdots{display:flex;gap:3px;}
+.fdots span{
+  display:block;width:3px;height:3px;border-radius:50%;background:var(--cyan);
+  animation:blink 1.1s ease-in-out infinite both;
 }
-.module-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 20px 40px -10px rgba(59,130,246,0.4) !important;
+.fdots span:nth-child(2){animation-delay:0.2s;}
+.fdots span:nth-child(3){animation-delay:0.4s;}
+@keyframes blink{0%,80%,100%{opacity:0.1;transform:scale(0.6);}40%{opacity:1;transform:scale(1);}}
+/* ── THINKING ── */
+.thinking{display:inline-flex;align-items:center;gap:8px;padding:4px 0;}
+.tdots{display:flex;gap:4px;}
+.tdots span{
+  display:block;width:5px;height:5px;border-radius:50%;
+  background:var(--blue);box-shadow:0 0 5px rgba(59,130,246,0.4);
+  animation:blink 1.1s ease-in-out infinite both;
 }
-.mc-tag {
-  font-family: monospace;
-  font-size: 0.75rem;
-  font-weight: 700;
-  letter-spacing: 1px;
-  padding: 2px 8px;
-  border-radius: 9999px;
-  display: inline-block;
-  margin-bottom: 12px;
+.tdots span:nth-child(2){animation-delay:0.2s;}
+.tdots span:nth-child(3){animation-delay:0.4s;}
+.thinking-lbl{
+  font-family:'JetBrains Mono',monospace;font-size:0.5rem;
+  color:var(--txt3);letter-spacing:0.2em;text-transform:uppercase;
 }
-.mc-name { font-size: 1.35rem; font-weight: 600; margin-bottom: 8px; }
-.mc-desc { color: #94a3b8; line-height: 1.4; }
-.mc-icon {
-  position: absolute;
-  bottom: 20px;
-  right: 20px;
-  font-size: 3rem;
-  opacity: 0.15;
+/* ── UPLOADER ── */
+div[data-testid="stFileUploader"]>div{
+  background:rgba(13,17,23,0.8)!important;
+  border:1px dashed var(--bdr2)!important;border-radius:8px!important;padding:12px!important;
 }
-
-/* CHAT INPUT – centered floating glass pill */
-div[data-testid="stChatInput"] {
-  background: rgba(15,23,42,0.72) !important;
-  backdrop-filter: blur(24px) !important;
-  border: 1px solid rgba(59,130,246,0.45) !important;
-  border-radius: 9999px !important;
-  box-shadow: 0 10px 40px -8px rgba(59,130,246,0.35),
-              0 0 0 1px rgba(255,255,255,0.1) inset !important;
-  margin: 0 auto 28px auto !important;
-  max-width: 780px !important;
-  width: calc(100% - 40px) !important;
-  position: fixed !important;
-  bottom: 24px !important;
-  left: 50% !important;
-  transform: translateX(-50%) !important;
-  z-index: 9999 !important;
-  padding: 6px 14px !important;
-  height: 58px !important;
+div[data-testid="stFileUploader"]>div:hover{background:var(--blue-lo)!important;border-color:rgba(59,130,246,0.4)!important;}
+div[data-testid="stFileUploader"] label,
+div[data-testid="stFileUploader"] small{
+  font-family:'JetBrains Mono',monospace!important;color:var(--txt2)!important;font-size:0.6rem!important;
 }
-div[data-testid="stChatInput"] textarea {
-  background: transparent !important;
-  border: none !important;
-  font-size: 1.05rem !important;
-  color: #e2e8f0 !important;
-  padding: 0 12px !important;
+/* ── HIDDEN ACTION BUTTONS ── */
+.hidden-btns{
+  position:absolute;left:-9999px;top:-9999px;
+  opacity:0;pointer-events:none;width:0;height:0;overflow:hidden;
 }
-div[data-testid="stChatInput"] button {
-  background: #3b82f6 !important;
-  border-radius: 9999px !important;
-  width: 42px !important;
-  height: 42px !important;
-  box-shadow: 0 0 18px rgba(59,130,246,0.5) !important;
+/* ── ALERTS ── */
+div[data-testid="stAlert"]{
+  background:var(--blue-lo)!important;border:1px solid var(--blue-bd)!important;
+  border-radius:8px!important;font-family:'JetBrains Mono',monospace!important;font-size:0.68rem!important;
 }
-
-/* Extra padding so messages aren't hidden under fixed input */
-.stChatMessage { padding-bottom: 110px !important; }
-
-/* File chip */
-.file-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  background: rgba(59,130,246,0.12);
-  border: 1px solid rgba(59,130,246,0.4);
-  border-radius: 9999px;
-  padding: 6px 14px;
-  font-size: 0.82rem;
-  margin-top: 8px;
-  box-shadow: 0 2px 12px rgba(59,130,246,0.15);
-}
-
-/* FAB group – sits directly beside the input pill */
-.fab-group {
-  position: fixed !important;
-  bottom: 32px !important;
-  left: 50% !important;
-  transform: translateX(-50%) !important;
-  z-index: 10000 !important;
-  display: flex !important;
-  gap: 12px !important;
-  width: 780px !important;
-  max-width: calc(100% - 40px) !important;
-  justify-content: space-between !important;
-  pointer-events: none !important;
-}
-.fab {
-  pointer-events: all !important;
-  width: 48px !important;
-  height: 48px !important;
-  border-radius: 9999px !important;
-  background: rgba(15,23,42,0.85) !important;
-  border: 1px solid rgba(59,130,246,0.4) !important;
-  box-shadow: 0 8px 25px rgba(59,130,246,0.3) !important;
-  backdrop-filter: blur(16px) !important;
-  font-size: 1.4rem !important;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.fab:hover {
-  transform: scale(1.08) !important;
-  box-shadow: 0 0 25px rgba(59,130,246,0.6) !important;
-}
-
-/* Thinking & file generating widgets */
-.thinking { display: inline-flex; align-items: center; gap: 8px; }
-.fgen, .fcard { margin: 12px 0; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -363,10 +584,9 @@ st.markdown(f"""
     <button class="nav-item {'active' if cur_mode=='Home' else ''}" onclick="window.location.href='?nav=Home'">⌂ Home</button>
     {nav_items_html}
   </div>
-  <div class="nav-right" style="margin-left:auto;display:flex;align-items:center;gap:8px;">
-    <div class="nav-status" style="font-size:0.8rem;color:#64748b;">
-      <span style="display:inline-block;width:8px;height:8px;background:#22c55e;border-radius:50%;margin-right:4px;"></span>
-      System Active
+  <div class="nav-right">
+    <div class="nav-status">
+      <div class="nav-dot"></div>System Active
     </div>
   </div>
 </div>
@@ -385,7 +605,7 @@ if "nav" in qp:
     st.rerun()
 
 # ══════════════════════════════════════════════════════════════════════════════
-# HOME – visual cards only (no hidden buttons, no onclick – top nav is the only way)
+# HOME – visual cards only (no hidden buttons)
 # ══════════════════════════════════════════════════════════════════════════════
 if st.session_state.mode == "Home":
     cards_html = ""
@@ -428,8 +648,8 @@ st.markdown(f"""
       <div class="ch-desc">{tm['desc']}</div>
     </div>
   </div>
-  <div class="ch-status {status_cls}" style="font-size:0.85rem;">
-    <span style="display:inline-block;width:8px;height:8px;background:#22c55e;border-radius:50%;margin-right:4px;"></span>{status_label}
+  <div class="ch-status {status_cls}">
+    <div class="ch-status-dot"></div>{status_label}
   </div>
 </div>
 """, unsafe_allow_html=True)
@@ -516,7 +736,7 @@ if att_clicked:
     st.session_state.show_upload = not st.session_state.show_upload
     st.rerun()
 
-# FABs beside input
+# FABs (left = attach, right = new) – positioned beside centered input
 att_active = "active" if st.session_state.show_upload else ""
 st.markdown(f"""
 <div class="fab-group">
