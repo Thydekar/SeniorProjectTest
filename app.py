@@ -242,7 +242,7 @@ div[data-testid="stSidebar"] .stButton > button:hover {
 /* ── MAIN ─────────────────────────────────────── */
 .main .block-container {
     max-width: 860px !important;
-    padding: 0 2.5rem 120px !important;
+    padding: 0 2.5rem 80px !important;
 }
 
 /* ── HOME ─────────────────────────────────────── */
@@ -421,43 +421,58 @@ div[data-testid="stChatInput"] button svg path,
 div[data-testid="stChatInput"] button svg rect { fill: #030b18 !important; stroke: none !important; }
 
 /* ── FIXED BOTTOM BAR ───────────────────────────── */
-/* Push the native Streamlit chat input into the fixed bar zone */
 div[data-testid="stBottom"] {
     position: fixed !important;
     bottom: 0 !important;
     left: 230px !important;
     right: 0 !important;
-    z-index: 999 !important;
-    background: linear-gradient(to top, #030b18 70%, transparent) !important;
-    padding: 10px 40px 26px 90px !important;
+    z-index: 100 !important;
+    background: linear-gradient(to top, #030b18 60%, transparent) !important;
+    padding: 8px 32px 14px 56px !important;
 }
 div[data-testid="stBottom"] > div {
     max-width: 860px !important;
     margin: 0 auto !important;
 }
+/* Main content bottom padding — just enough to clear the input bar */
+.main .block-container {
+    padding-bottom: 80px !important;
+}
 
-/* The two icon buttons rendered as a fixed HTML overlay */
+/* Two icon buttons sitting to the left of the chat input */
 #spartan-fixed-bar {
     position: fixed !important;
-    bottom: 18px !important;
-    left: 248px !important;
-    z-index: 1000 !important;
+    bottom: 14px !important;
+    left: 238px !important;
+    z-index: 200 !important;
     display: flex !important;
     flex-direction: column !important;
-    gap: 6px !important;
+    gap: 4px !important;
 }
 .spartan-icon-btn {
-    width: 40px; height: 40px;
+    width: 36px; height: 36px;
     display: flex; align-items: center; justify-content: center;
     background: rgba(6,18,38,0.94); backdrop-filter: blur(14px);
-    border: 1px solid var(--bdr2); border-radius: 10px;
-    font-size: 1rem; color: var(--txt3);
-    cursor: pointer; transition: all 0.15s; text-decoration: none;
-    box-sizing: border-box;
+    border: 1px solid var(--bdr2); border-radius: 8px;
+    font-size: 0.95rem; color: var(--txt3);
+    cursor: pointer; transition: all 0.15s;
+    box-sizing: border-box; user-select: none;
 }
 .spartan-icon-btn:hover {
     background: var(--blue-lo); border-color: var(--blue-bd);
-    color: var(--blue); box-shadow: 0 0 14px rgba(0,180,255,0.12);
+    color: var(--blue); box-shadow: 0 0 12px rgba(0,180,255,0.12);
+}
+
+/* Hide the real Streamlit buttons — triggered by JS only */
+#btn-new-chat, #btn-attach { display: none !important; }
+
+/* Hide the tiny helper columns holding the real buttons */
+div[data-testid="stHorizontalBlock"]:has(button[kind="secondary"]) {
+    position: absolute !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+    height: 0 !important;
+    overflow: hidden !important;
 }
 
 /* ── ALERTS ─────────────────────────────────────── */
@@ -678,27 +693,36 @@ if st.session_state.show_upload:
 else:
     uploaded_file = None
 
-# ── Handle query-param actions from fixed HTML buttons ────────────────────────
-qp = st.query_params
-if qp.get("action") == "new":
-    st.query_params.clear()
+# ── Hidden action buttons (triggered by JS clicks from the HTML overlay) ──────
+col_new, col_attach, _ = st.columns([1, 1, 20])
+with col_new:
+    new_clicked = st.button("↺", key="new_chat")
+with col_attach:
+    attach_clicked = st.button("📎", key="attach_btn")
+
+if new_clicked:
     go_to_tool(tool)
     st.rerun()
-elif qp.get("action") == "attach":
-    st.query_params.clear()
+if attach_clicked:
     st.session_state.show_upload = not st.session_state.show_upload
     st.rerun()
 
-# ── Fixed HTML overlay — new session + attach buttons ─────────────────────────
+# ── Fixed HTML overlay buttons — click the hidden st.buttons via JS ────────────
 attach_label = "✕" if st.session_state.show_upload else "📎"
 st.markdown(f"""
 <div id="spartan-fixed-bar">
-  <a class="spartan-icon-btn" href="?action=new" title="New session">↺</a>
-  <a class="spartan-icon-btn" href="?action=attach" title="Attach file">{attach_label}</a>
+  <div class="spartan-icon-btn" id="sib-new" title="New session" onclick="
+    var btns = window.parent.document.querySelectorAll('button[kind=secondary]');
+    for(var b of btns){{ if(b.innerText.trim()==='↺'){{ b.click(); break; }} }}
+  ">↺</div>
+  <div class="spartan-icon-btn" id="sib-attach" title="Attach file" onclick="
+    var btns = window.parent.document.querySelectorAll('button[kind=secondary]');
+    for(var b of btns){{ if(b.innerText.trim()==='📎'){{ b.click(); break; }} }}
+  ">{attach_label}</div>
 </div>
 """, unsafe_allow_html=True)
 
-# ── Chat input (Streamlit renders this fixed at page bottom natively) ─────────
+# ── Chat input ────────────────────────────────────────────────────────────────
 user_input = st.chat_input("> _  message Spartan AI…")
 
 # ── Handle user input ─────────────────────────────────────────────────────────
