@@ -585,7 +585,7 @@ _HIDE_JS = (
     '<script>'
     '(function(){'
     'var L=["nav:Home","nav:Assignment Generation","nav:Assignment Grader",'
-    '"nav:AI Content Detector","nav:Student Chatbot","\u21ba","\ud83d\udcce"];'
+    '"nav:AI Content Detector","nav:Student Chatbot","\u21ba","\U0001F4CE"];'
     'function h(){'
     'window.parent.document.querySelectorAll("button").forEach(function(b){'
     'if(L.indexOf(b.innerText.trim())!==-1){'
