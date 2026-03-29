@@ -96,7 +96,7 @@ def make_dl_bytes(content: str, ext: str):
 
 OUT_TEXT_RE = re.compile(r'\[output-text\](.*?)\[/output-text\]', re.DOTALL)
 
-# ── ORIGINAL CSS (exactly as provided) + small FAB override for centered left/right buttons ──
+# ── ORIGINAL CSS + GRID BACKGROUND (exactly what you asked for) ───────────────
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap');
@@ -128,10 +128,14 @@ html,body,[class*="css"],.stApp{
   color:var(--txt)!important;
   -webkit-font-smoothing:antialiased!important;
 }
+/* GRID BACKGROUND + original radial glow */
 .stApp{
   background:
+    linear-gradient(rgba(59,130,246,0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(59,130,246,0.06) 1px, transparent 1px),
     radial-gradient(ellipse 60% 40% at 50% -10%,rgba(59,130,246,0.06) 0%,transparent 60%),
     var(--bg)!important;
+  background-size: 48px 48px, 48px 48px, auto, auto !important;
 }
 ::-webkit-scrollbar{width:4px;}
 ::-webkit-scrollbar-track{background:transparent;}
@@ -390,7 +394,7 @@ div[data-testid="stChatInput"] button{
 div[data-testid="stChatInput"] button svg path,
 div[data-testid="stChatInput"] button svg rect{fill:#fff!important;}
 
-/* ── FLOATING ACTION BUTTONS (overridden to sit directly left & right of centered input) ── */
+/* ── FLOATING ACTION BUTTONS (centered left=attach, right=new) ── */
 .fab-group{
   position:fixed;bottom:32px;left:50%;transform:translateX(-50%);
   z-index:600;
@@ -563,7 +567,19 @@ def render_msg(raw, idx):
             st.download_button(f"↓ Download {fname}", data=fb, file_name=fname,
                                mime=mime, key=f"dl_{idx}_{si}")
 
-# ── Top nav (ONLY navigation method) ─────────────────────────────────────────
+# ── NAV HANDLER (moved to top so clicks always work) ───────────────────────────
+qp = st.query_params
+if "nav" in qp:
+    dest = qp["nav"].replace("+", " ")
+    st.query_params.clear()
+    if dest == "Home":
+        st.session_state.mode = "Home"
+        st.session_state.messages = []
+    elif dest in MODEL_MAP:
+        go_tool(dest)
+    st.rerun()
+
+# ── Top nav (HTML with onclick – now guaranteed to trigger the handler above) ──
 cur_mode = st.session_state.mode
 nav_items_html = ""
 for name, tm in TOOL_META.items():
@@ -592,20 +608,16 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
-# ── Handle nav query params ───────────────────────────────────────────────────
-qp = st.query_params
-if "nav" in qp:
-    dest = qp["nav"].replace("+", " ")
-    st.query_params.clear()
-    if dest == "Home":
-        st.session_state.mode = "Home"
-        st.session_state.messages = []
-    elif dest in MODEL_MAP:
-        go_tool(dest)
-    st.rerun()
+def go_tool(name):
+    st.session_state.mode        = name
+    st.session_state.messages    = [{"role":"assistant","content":"[output-text]System online. How can I assist you today?[/output-text]"}]
+    st.session_state.pending_attach = None
+    st.session_state.attach_name = None
+    st.session_state.attach_ext  = None
+    st.session_state.show_upload = False
 
 # ══════════════════════════════════════════════════════════════════════════════
-# HOME – visual cards only (no hidden buttons)
+# HOME
 # ══════════════════════════════════════════════════════════════════════════════
 if st.session_state.mode == "Home":
     cards_html = ""
@@ -638,7 +650,6 @@ online = model_online(model)
 status_cls   = "online" if online else "offline"
 status_label = "Online"  if online else "Offline"
 
-# Tool header
 st.markdown(f"""
 <div class="chat-header">
   <div class="ch-left">
@@ -654,7 +665,7 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
-# Chat history – attachment chip under user messages
+# Chat history
 for i, msg in enumerate(st.session_state.messages):
     with st.chat_message(msg["role"], avatar="🤖" if msg["role"]=="assistant" else "👤"):
         if msg["role"] == "assistant":
@@ -671,7 +682,6 @@ for i, msg in enumerate(st.session_state.messages):
                 </div>
                 """, unsafe_allow_html=True)
 
-# Pending file chip
 if st.session_state.pending_attach:
     st.markdown(f"""<div class="file-chip">
   <span class="file-chip-icon">📎</span>
@@ -719,7 +729,7 @@ if st.session_state.show_upload:
             except Exception as e:
                 st.error(f"Read error: {e}")
 
-# Hidden buttons for FABs
+# Hidden FAB triggers
 with st.container():
     st.markdown('<div class="hidden-btns">', unsafe_allow_html=True)
     col1, col2, _ = st.columns([1,1,20])
@@ -736,7 +746,7 @@ if att_clicked:
     st.session_state.show_upload = not st.session_state.show_upload
     st.rerun()
 
-# FABs (left = attach, right = new) – positioned beside centered input
+# FABs (centered beside input)
 att_active = "active" if st.session_state.show_upload else ""
 st.markdown(f"""
 <div class="fab-group">
@@ -817,8 +827,7 @@ if user_input:
                                timeout=600, verify=False, stream=True) as r:
                 r.raise_for_status()
                 for line in r.iter_lines():
-                    if not line:
-                        continue
+                    if not line: continue
                     tok = json.loads(line).get("message", {}).get("content", "")
                     full += tok
 
@@ -829,15 +838,13 @@ if user_input:
                             if "output-file" in m2.group(1):
                                 state = "file"
                                 pre = OUT_TEXT_RE.sub(r'\1', full[:m2.start()]).strip()
-                                if pre:
-                                    active.markdown(pre)
+                                if pre: active.markdown(pre)
                                 gen_slot = st.empty()
                                 gen_slot.markdown(FILE_GEN, unsafe_allow_html=True)
                             else:
                                 state = "text"
                                 live = re.sub(r'\[/output-text\].*', '', full[m2.end():]).strip()
-                                if live:
-                                    active.markdown(live + "▌", unsafe_allow_html=True)
+                                if live: active.markdown(live + "▌", unsafe_allow_html=True)
                     elif state == "text":
                         m3 = re.search(r'\[output-text\](.*?)(?=\[/output-text\]|\[output-file-)', full, re.DOTALL)
                         if m3:
@@ -845,8 +852,7 @@ if user_input:
                         else:
                             pos = full.rfind('[output-text]')
                             live = re.sub(r'\[/?$|\[/output', '', full[pos + len('[output-text]'):] if pos >= 0 else "").strip()
-                        if live:
-                            active.markdown(live + "▌", unsafe_allow_html=True)
+                        if live: active.markdown(live + "▌", unsafe_allow_html=True)
                         if FILE_OPEN.search(full):
                             state = "file"
                             active.markdown(live)
@@ -856,8 +862,7 @@ if user_input:
 
             think_slot.empty()
             resp_slot.empty()
-            if gen_slot:
-                gen_slot.empty()
+            if gen_slot: gen_slot.empty()
             render_msg(full, len(st.session_state.messages))
 
         except Exception as e:
