@@ -516,11 +516,7 @@ div[data-testid="stFileUploader"] label,
 div[data-testid="stFileUploader"] small{
   font-family:'JetBrains Mono',monospace!important;color:var(--txt2)!important;font-size:0.6rem!important;
 }
-/* ── HIDDEN ACTION BUTTONS ── */
-.hidden-btns{
-  position:absolute;left:-9999px;top:-9999px;
-  opacity:0;pointer-events:none;width:0;height:0;overflow:hidden;
-}
+
 /* ── ALERTS ── */
 div[data-testid="stAlert"]{
   background:var(--blue-lo)!important;border:1px solid var(--blue-bd)!important;
@@ -533,6 +529,31 @@ div[data-testid="stAlert"]{
 for k,v in [("mode","Home"),("messages",[]),("pending_attach",None),
             ("attach_name",None),("attach_ext",None),("show_upload",False)]:
     if k not in st.session_state: st.session_state[k] = v
+
+# ── Query param nav handler — must run BEFORE any rendering ───────────────────
+_qp = st.query_params
+if "nav" in _qp:
+    _dest = _qp["nav"]
+    st.query_params.clear()
+    if _dest == "Home":
+        st.session_state.mode = "Home"
+        st.session_state.messages = []
+    elif _dest in MODEL_MAP:
+        st.session_state.mode        = _dest
+        st.session_state.messages    = [{"role":"assistant","content":"[output-text]System online. How can I assist you today?[/output-text]"}]
+        st.session_state.pending_attach = None
+        st.session_state.attach_name = None
+        st.session_state.attach_ext  = None
+        st.session_state.show_upload = False
+    st.rerun()
+elif "action" in _qp:
+    _act = _qp["action"]
+    st.query_params.clear()
+    if _act == "new_chat" and st.session_state.mode in MODEL_MAP:
+        go_tool(st.session_state.mode)
+    elif _act == "toggle_upload":
+        st.session_state.show_upload = not st.session_state.show_upload
+    st.rerun()
 
 def go_tool(name):
     st.session_state.mode        = name
@@ -567,74 +588,35 @@ def render_msg(raw, idx):
             st.download_button(f"↓ Download {fname}", data=fb, file_name=fname,
                                mime=mime, key=f"dl_{idx}_{si}")
 
-# ── Hidden nav trigger buttons — hidden via CSS aria-label selectors below ─────
-_nav_cols = st.columns(len(TOOL_META) + 1)
-with _nav_cols[0]:
-    if st.button("nav:Home", key="navbtn_Home"):
-        st.session_state.mode = "Home"
-        st.session_state.messages = []
-        st.rerun()
-for _i, _name in enumerate(TOOL_META.keys(), start=1):
-    with _nav_cols[_i]:
-        if st.button("nav:" + _name, key="navbtn_" + _name):
-            go_tool(_name)
-            st.rerun()
-
-# CSS: hide trigger button columns by aria-label (same iframe — always works)
-st.markdown("""
-<style>
-[data-testid="stColumn"]:has(button[aria-label="nav:Home"]),
-[data-testid="stColumn"]:has(button[aria-label="nav:Assignment Generation"]),
-[data-testid="stColumn"]:has(button[aria-label="nav:Assignment Grader"]),
-[data-testid="stColumn"]:has(button[aria-label="nav:AI Content Detector"]),
-[data-testid="stColumn"]:has(button[aria-label="nav:Student Chatbot"]),
-[data-testid="stColumn"]:has(button[aria-label="↺"]),
-[data-testid="stColumn"]:has(button[aria-label="📎"]) {
-  display: none !important;
-}
-</style>
-""", unsafe_allow_html=True)
-
-# ── Top nav (HTML shell — uses document, same iframe as app) ───────────────────
+# ── Top nav — plain window.location.href, no hidden buttons ───────────────────
 cur_mode = st.session_state.mode
-
-def _nav_js(label):
-    return (
-        "(function(){"
-        "var btns=document.querySelectorAll('button[aria-label=\"" + label + "\"]');"
-        "if(btns.length)btns[0].click();"
-        "})()"
-    )
-
 nav_items_html = ""
 for name, tm in TOOL_META.items():
     active = "active" if cur_mode == name else ""
-    js = _nav_js("nav:" + name)
     nav_items_html += (
-        '<button class="nav-item ' + active + '" onclick="' + js + '">'
-        + tm["icon"] + " " + name + "</button>"
+        f'<button class="nav-item {active}" '
+        f'onclick="window.location.href=\'?nav={name.replace(" ", "%20")}\'">'
+        f'{tm["icon"]} {name}</button>'
     )
-
 home_active = "active" if cur_mode == "Home" else ""
-home_js = _nav_js("nav:Home")
-
-st.markdown(
-    '<div class="spartan-nav">'
-    '<div class="spartan-logo">'
-    '<div class="spartan-logo-mark">S</div>'
-    '<div><div class="spartan-logo-text">Spartan AI</div>'
-    '<div class="spartan-logo-ver">v2.0</div></div>'
-    '</div>'
-    '<div class="nav-items">'
-    '<button class="nav-item ' + home_active + '" onclick="' + home_js + '">&#8962; Home</button>'
-    + nav_items_html +
-    '</div>'
-    '<div class="nav-right"><div class="nav-status">'
-    '<div class="nav-dot"></div>System Active'
-    '</div></div>'
-    '</div>',
-    unsafe_allow_html=True
-)
+st.markdown(f"""
+<div class="spartan-nav">
+  <div class="spartan-logo">
+    <div class="spartan-logo-mark">S</div>
+    <div>
+      <div class="spartan-logo-text">Spartan AI</div>
+      <div class="spartan-logo-ver">v2.0</div>
+    </div>
+  </div>
+  <div class="nav-items">
+    <button class="nav-item {home_active}" onclick="window.location.href='?nav=Home'">&#8962; Home</button>
+    {nav_items_html}
+  </div>
+  <div class="nav-right">
+    <div class="nav-status"><div class="nav-dot"></div>System Active</div>
+  </div>
+</div>
+""", unsafe_allow_html=True)
 
 # ══════════════════════════════════════════════════════════════════════════════
 # HOME
@@ -642,14 +624,14 @@ st.markdown(
 if st.session_state.mode == "Home":
     cards_html = ""
     for name, tm in TOOL_META.items():
-        card_js = _nav_js("nav:" + name)
+        url = "?nav=" + name.replace(" ", "%20")
         cards_html += (
-            '<div class="module-card" style="color:' + tm['color'] + ';" onclick="' + card_js + '">'
-            '<div class="mc-tag">' + tm['tag'] + '</div>'
-            '<div class="mc-name">' + name + '</div>'
-            '<div class="mc-desc">' + tm['desc'] + '</div>'
-            '<div class="mc-icon">' + tm['icon'] + '</div>'
-            '</div>'
+            f'<div class="module-card" style="color:{tm["color"]};" onclick="window.location.href=\'{url}\'">'
+            f'<div class="mc-tag">{tm["tag"]}</div>'
+            f'<div class="mc-name">{name}</div>'
+            f'<div class="mc-desc">{tm["desc"]}</div>'
+            f'<div class="mc-icon">{tm["icon"]}</div>'
+            f'</div>'
         )
 
     st.markdown(f"""
@@ -754,31 +736,14 @@ if st.session_state.show_upload:
             except Exception as e:
                 st.error(f"Read error: {e}")
 
-# Hidden FAB triggers
-with st.container():
-    col1, col2, _ = st.columns([1,1,20])
-    with col1:
-        new_clicked = st.button("↺", key="btn_new")
-    with col2:
-        att_clicked = st.button("📎", key="btn_attach")
-
-if new_clicked:
-    go_tool(tool)
-    st.rerun()
-if att_clicked:
-    st.session_state.show_upload = not st.session_state.show_upload
-    st.rerun()
-
-# FABs (centered beside input)
+# FABs — use query params, same as nav (no hidden buttons needed)
 att_active = "active" if st.session_state.show_upload else ""
 st.markdown(f"""
 <div class="fab-group">
-  <div class="fab" title="Attach file" onclick="(function(){{
-    var b=document.querySelector('button[aria-label=\\"📎\\"]');if(b)b.click();
-  }})()">📎</div>
-  <div class="fab" title="New chat" onclick="(function(){{
-    var b=document.querySelector('button[aria-label=\\"↺\\"]');if(b)b.click();
-  }})()">↺</div>
+  <div class="fab {att_active}" title="Attach file"
+       onclick="window.location.href='?action=toggle_upload'">📎</div>
+  <div class="fab" title="New chat"
+       onclick="window.location.href='?action=new_chat'">↺</div>
 </div>
 """, unsafe_allow_html=True)
 
