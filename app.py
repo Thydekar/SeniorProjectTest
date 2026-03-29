@@ -653,7 +653,10 @@ if st.session_state.mode == "Home":
 # ══════════════════════════════════════════════════════════════════════════════
 # TOOL PAGE
 # ══════════════════════════════════════════════════════════════════════════════
-tool  = st.session_state.mode
+tool = st.session_state.mode
+if tool not in MODEL_MAP:
+    st.session_state.mode = "Home"
+    st.rerun()
 model = MODEL_MAP[tool]
 tm    = TOOL_META[tool]
 online = model_online(model)
