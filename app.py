@@ -567,63 +567,77 @@ def render_msg(raw, idx):
             st.download_button(f"↓ Download {fname}", data=fb, file_name=fname,
                                mime=mime, key=f"dl_{idx}_{si}")
 
-# ── Hidden nav trigger buttons (same pattern as FABs — JS finds & clicks these) ─
-with st.container():
-    st.markdown('<div class="hidden-btns">', unsafe_allow_html=True)
-    _nav_cols = st.columns(len(TOOL_META) + 1)
-    with _nav_cols[0]:
-        if st.button("nav:Home", key="navbtn_Home"):
-            st.session_state.mode = "Home"
-            st.session_state.messages = []
+# ── Hidden nav trigger buttons — Streamlit handles state; JS (below) hides them ─
+_nav_cols = st.columns(len(TOOL_META) + 1)
+with _nav_cols[0]:
+    if st.button("nav:Home", key="navbtn_Home"):
+        st.session_state.mode = "Home"
+        st.session_state.messages = []
+        st.rerun()
+for _i, _name in enumerate(TOOL_META.keys(), start=1):
+    with _nav_cols[_i]:
+        if st.button("nav:" + _name, key="navbtn_" + _name):
+            go_tool(_name)
             st.rerun()
-    for _i, _name in enumerate(TOOL_META.keys(), start=1):
-        with _nav_cols[_i]:
-            if st.button(f"nav:{_name}", key=f"navbtn_{_name}"):
-                go_tool(_name)
-                st.rerun()
-    st.markdown('</div>', unsafe_allow_html=True)
 
-# ── Top nav (HTML shell — JS clicks the hidden Streamlit buttons above) ────────
+# JS: collapse every column that holds a trigger button (runs after React renders)
+_HIDE_JS = (
+    '<script>'
+    '(function(){'
+    'var L=["nav:Home","nav:Assignment Generation","nav:Assignment Grader",'
+    '"nav:AI Content Detector","nav:Student Chatbot","\u21ba","\ud83d\udcce"];'
+    'function h(){'
+    'window.parent.document.querySelectorAll("button").forEach(function(b){'
+    'if(L.indexOf(b.innerText.trim())!==-1){'
+    'var c=b.closest(\'[data-testid="column"]\');'
+    'if(c)c.style.display="none";'
+    '}});}'
+    'h();setTimeout(h,200);setTimeout(h,600);'
+    '})();'
+    '</script>'
+)
+st.markdown(_HIDE_JS, unsafe_allow_html=True)
+
+# ── Top nav (HTML shell — JS above clicks the hidden Streamlit buttons) ────────
 cur_mode = st.session_state.mode
 
 def _nav_js(label):
-    """Return an onclick that finds the hidden Streamlit button by its text."""
     return (
-        f"(function(){{"
-        f"var btns=window.parent.document.querySelectorAll('button');"
-        f"for(var b of btns){{if(b.innerText.trim()==='{label}'){{b.click();return;}}}}"
-        f"}})()"
+        "(function(){"
+        "var btns=window.parent.document.querySelectorAll('button');"
+        "for(var b of btns){if(b.innerText.trim()==='" + label + "'){b.click();return;}}"
+        "})()"
     )
 
 nav_items_html = ""
 for name, tm in TOOL_META.items():
     active = "active" if cur_mode == name else ""
-    js = _nav_js(f"nav:{name}")
-    nav_items_html += f'<button class="nav-item {active}" onclick="{js}">{tm["icon"]} {name}</button>'
+    js = _nav_js("nav:" + name)
+    nav_items_html += (
+        '<button class="nav-item ' + active + '" onclick="' + js + '">'
+        + tm["icon"] + " " + name + "</button>"
+    )
 
 home_active = "active" if cur_mode == "Home" else ""
 home_js = _nav_js("nav:Home")
 
-st.markdown(f"""
-<div class="spartan-nav">
-  <div class="spartan-logo">
-    <div class="spartan-logo-mark">S</div>
-    <div>
-      <div class="spartan-logo-text">Spartan AI</div>
-      <div class="spartan-logo-ver">v2.0</div>
-    </div>
-  </div>
-  <div class="nav-items">
-    <button class="nav-item {home_active}" onclick="{home_js}">⌂ Home</button>
-    {nav_items_html}
-  </div>
-  <div class="nav-right">
-    <div class="nav-status">
-      <div class="nav-dot"></div>System Active
-    </div>
-  </div>
-</div>
-""", unsafe_allow_html=True)
+st.markdown(
+    '<div class="spartan-nav">'
+    '<div class="spartan-logo">'
+    '<div class="spartan-logo-mark">S</div>'
+    '<div><div class="spartan-logo-text">Spartan AI</div>'
+    '<div class="spartan-logo-ver">v2.0</div></div>'
+    '</div>'
+    '<div class="nav-items">'
+    '<button class="nav-item ' + home_active + '" onclick="' + home_js + '">&#8962; Home</button>'
+    + nav_items_html +
+    '</div>'
+    '<div class="nav-right"><div class="nav-status">'
+    '<div class="nav-dot"></div>System Active'
+    '</div></div>'
+    '</div>',
+    unsafe_allow_html=True
+)
 
 # ══════════════════════════════════════════════════════════════════════════════
 # HOME
@@ -631,14 +645,15 @@ st.markdown(f"""
 if st.session_state.mode == "Home":
     cards_html = ""
     for name, tm in TOOL_META.items():
-        card_js = _nav_js(f"nav:{name}")
-        cards_html += f"""
-<div class="module-card" style="color:{tm['color']};" onclick="{card_js}">
-  <div class="mc-tag">{tm['tag']}</div>
-  <div class="mc-name">{name}</div>
-  <div class="mc-desc">{tm['desc']}</div>
-  <div class="mc-icon">{tm['icon']}</div>
-</div>"""
+        card_js = _nav_js("nav:" + name)
+        cards_html += (
+            '<div class="module-card" style="color:' + tm['color'] + ';" onclick="' + card_js + '">'
+            '<div class="mc-tag">' + tm['tag'] + '</div>'
+            '<div class="mc-name">' + name + '</div>'
+            '<div class="mc-desc">' + tm['desc'] + '</div>'
+            '<div class="mc-icon">' + tm['icon'] + '</div>'
+            '</div>'
+        )
 
     st.markdown(f"""
 <div class="home-hero">
@@ -653,7 +668,7 @@ if st.session_state.mode == "Home":
 # ══════════════════════════════════════════════════════════════════════════════
 # TOOL PAGE
 # ══════════════════════════════════════════════════════════════════════════════
-tool = st.session_state.mode
+tool  = st.session_state.mode
 if tool not in MODEL_MAP:
     st.session_state.mode = "Home"
     st.rerun()
@@ -744,13 +759,11 @@ if st.session_state.show_upload:
 
 # Hidden FAB triggers
 with st.container():
-    st.markdown('<div class="hidden-btns">', unsafe_allow_html=True)
     col1, col2, _ = st.columns([1,1,20])
     with col1:
         new_clicked = st.button("↺", key="btn_new")
     with col2:
         att_clicked = st.button("📎", key="btn_attach")
-    st.markdown('</div>', unsafe_allow_html=True)
 
 if new_clicked:
     go_tool(tool)
