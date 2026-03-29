@@ -7,6 +7,7 @@ import time
 import re
 import io
 import base64
+import pathlib
 import warnings
 
 warnings.filterwarnings("ignore", message="Unverified HTTPS request")
@@ -120,45 +121,15 @@ def is_model_online(model_name: str) -> bool:
     available = get_available_models()
     return any(model_name in name for name in available)
 
-# ── Custom SVG avatars ─────────────────────────────────────────────────────────
-_AI_SVG = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 28 28">
-<rect width="28" height="28" fill="#020d1c" rx="5"/>
-<polygon points="14,2.5 25,8.5 25,20.5 14,26.5 3,20.5 3,8.5" fill="none" stroke="#00b4ff" stroke-width="1.4"/>
-<polygon points="14,6 21.5,10.5 21.5,19.5 14,24 6.5,19.5 6.5,10.5" fill="none" stroke="#00b4ff" stroke-width="0.5" opacity="0.35"/>
-<circle cx="14" cy="14.5" r="4" fill="none" stroke="#06e5d4" stroke-width="1"/>
-<circle cx="14" cy="14.5" r="1.4" fill="#00b4ff"/>
-<line x1="14" y1="2.5" x2="14" y2="10.5" stroke="#00b4ff" stroke-width="0.9" opacity="0.55"/>
-<line x1="25" y1="8.5" x2="18.5" y2="12" stroke="#00b4ff" stroke-width="0.9" opacity="0.55"/>
-<line x1="25" y1="20.5" x2="18.5" y2="17" stroke="#00b4ff" stroke-width="0.9" opacity="0.55"/>
-<line x1="14" y1="26.5" x2="14" y2="18.5" stroke="#00b4ff" stroke-width="0.9" opacity="0.55"/>
-<line x1="3" y1="20.5" x2="9.5" y2="17" stroke="#00b4ff" stroke-width="0.9" opacity="0.55"/>
-<line x1="3" y1="8.5" x2="9.5" y2="12" stroke="#00b4ff" stroke-width="0.9" opacity="0.55"/>
-<circle cx="14" cy="2.5" r="1.1" fill="#00b4ff"/>
-<circle cx="25" cy="8.5" r="1.1" fill="#00b4ff"/>
-<circle cx="25" cy="20.5" r="1.1" fill="#00b4ff"/>
-<circle cx="14" cy="26.5" r="1.1" fill="#00b4ff"/>
-<circle cx="3" cy="20.5" r="1.1" fill="#00b4ff"/>
-<circle cx="3" cy="8.5" r="1.1" fill="#00b4ff"/>
-</svg>"""
+# ── Avatar images (base64-encoded PNGs) ───────────────────────────────────────
+def _load_img_b64(path: str) -> str:
+    try:
+        return base64.b64encode(pathlib.Path(path).read_bytes()).decode()
+    except Exception:
+        return ""
 
-_USER_SVG = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 28 28">
-<rect width="28" height="28" fill="#1c0505" rx="5"/>
-<path d="M14 2.5 L25.5 14 L14 25.5 L2.5 14 Z" fill="none" stroke="#ef4444" stroke-width="1.4"/>
-<path d="M14 7 L21 14 L14 21 L7 14 Z" fill="none" stroke="#ef4444" stroke-width="0.6" opacity="0.35"/>
-<circle cx="14" cy="14" r="3.5" fill="none" stroke="#f87171" stroke-width="1"/>
-<line x1="14" y1="2.5" x2="14" y2="10.5" stroke="#ef4444" stroke-width="0.8" opacity="0.5"/>
-<line x1="25.5" y1="14" x2="17.5" y2="14" stroke="#ef4444" stroke-width="0.8" opacity="0.5"/>
-<line x1="14" y1="25.5" x2="14" y2="17.5" stroke="#ef4444" stroke-width="0.8" opacity="0.5"/>
-<line x1="2.5" y1="14" x2="10.5" y2="14" stroke="#ef4444" stroke-width="0.8" opacity="0.5"/>
-<circle cx="14" cy="14" r="1.3" fill="#ef4444"/>
-<rect x="12.5" y="1" width="3" height="3" rx="0.5" fill="#ef4444" transform="rotate(45 14 2.5)"/>
-<rect x="24" y="12.5" width="3" height="3" rx="0.5" fill="#ef4444" transform="rotate(45 25.5 14)"/>
-<rect x="12.5" y="24" width="3" height="3" rx="0.5" fill="#ef4444" transform="rotate(45 14 25.5)"/>
-<rect x="1" y="12.5" width="3" height="3" rx="0.5" fill="#ef4444" transform="rotate(45 2.5 14)"/>
-</svg>"""
-
-_AI_B64   = base64.b64encode(_AI_SVG.strip().encode()).decode()
-_USER_B64 = base64.b64encode(_USER_SVG.strip().encode()).decode()
+_AI_B64   = _load_img_b64("attached_assets/image_1774745436035.png")
+_USER_B64 = _load_img_b64("attached_assets/image_1774745545456.png")
 
 # ── Page config ───────────────────────────────────────────────────────────────
 st.set_page_config(page_title="Spartan AI", layout="wide", initial_sidebar_state="expanded")
@@ -476,14 +447,14 @@ div[data-testid="stAlert"] { background: var(--blue-lo) !important; border: 1px 
 </style>
 """, unsafe_allow_html=True)
 
-# ── SVG avatar injection + JS sticky bar fix ──────────────────────────────────
+# ── Avatar image injection + JS sticky bar fix ────────────────────────────────
 st.markdown(f"""
 <style>
 div[data-testid="chatAvatarIcon-assistant"] {{
-    background: #020d1c url('data:image/svg+xml;base64,{_AI_B64}') no-repeat center/cover !important;
+    background: #020d1c url('data:image/png;base64,{_AI_B64}') no-repeat center/cover !important;
 }}
 div[data-testid="chatAvatarIcon-user"] {{
-    background: #1c0505 url('data:image/svg+xml;base64,{_USER_B64}') no-repeat center/cover !important;
+    background: #000 url('data:image/png;base64,{_USER_B64}') no-repeat center/cover !important;
 }}
 </style>
 
@@ -653,7 +624,7 @@ st.markdown(f"""
 
 # ── Chat history ──────────────────────────────────────────────────────────────
 for i, msg in enumerate(st.session_state.messages):
-    with st.chat_message(msg["role"], avatar="A" if msg["role"] == "assistant" else "U"):
+    with st.chat_message(msg["role"], avatar="🤖" if msg["role"] == "assistant" else "👤"):
         if msg["role"] == "assistant":
             render_assistant_message(msg["content"], i)
         else:
@@ -747,12 +718,12 @@ if user_input:
         api_content = f"[output-text]{user_input}[/output-text]"
 
     st.session_state.messages.append({"role":"user","content":api_content,"display_text":user_input})
-    with st.chat_message("user", avatar="U"):
+    with st.chat_message("user", avatar="👤"):
         st.markdown(user_input)
 
     full_response = ""
 
-    with st.chat_message("assistant", avatar="A"):
+    with st.chat_message("assistant", avatar="🤖"):
         thinking_slot = st.empty()
         resp_slot     = st.empty()
         thinking_slot.markdown("""<div class="thinking">
