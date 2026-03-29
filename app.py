@@ -420,21 +420,44 @@ div[data-testid="stChatInput"] button svg { width: 13px !important; height: 13px
 div[data-testid="stChatInput"] button svg path,
 div[data-testid="stChatInput"] button svg rect { fill: #030b18 !important; stroke: none !important; }
 
-/* ── BOTTOM BAR ─────────────────────────────────── */
-#spartan-bar-new .stButton > button,
-#spartan-bar-attach .stButton > button {
-    all: unset !important;
-    width: 44px !important; height: 44px !important;
-    display: flex !important; align-items: center !important; justify-content: center !important;
-    background: rgba(6,18,38,0.94) !important; backdrop-filter: blur(14px) !important;
-    border: 1px solid var(--bdr2) !important; border-radius: 10px !important;
-    font-size: 1.05rem !important; color: var(--txt3) !important;
-    cursor: pointer !important; transition: all 0.15s !important; box-sizing: border-box !important;
+/* ── FIXED BOTTOM BAR ───────────────────────────── */
+/* Push the native Streamlit chat input into the fixed bar zone */
+div[data-testid="stBottom"] {
+    position: fixed !important;
+    bottom: 0 !important;
+    left: 230px !important;
+    right: 0 !important;
+    z-index: 999 !important;
+    background: linear-gradient(to top, #030b18 70%, transparent) !important;
+    padding: 10px 40px 26px 90px !important;
 }
-#spartan-bar-new .stButton > button:hover,
-#spartan-bar-attach .stButton > button:hover {
-    background: var(--blue-lo) !important; border-color: var(--blue-bd) !important;
-    color: var(--blue) !important; box-shadow: 0 0 14px rgba(0,180,255,0.12) !important;
+div[data-testid="stBottom"] > div {
+    max-width: 860px !important;
+    margin: 0 auto !important;
+}
+
+/* The two icon buttons rendered as a fixed HTML overlay */
+#spartan-fixed-bar {
+    position: fixed !important;
+    bottom: 18px !important;
+    left: 248px !important;
+    z-index: 1000 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 6px !important;
+}
+.spartan-icon-btn {
+    width: 40px; height: 40px;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(6,18,38,0.94); backdrop-filter: blur(14px);
+    border: 1px solid var(--bdr2); border-radius: 10px;
+    font-size: 1rem; color: var(--txt3);
+    cursor: pointer; transition: all 0.15s; text-decoration: none;
+    box-sizing: border-box;
+}
+.spartan-icon-btn:hover {
+    background: var(--blue-lo); border-color: var(--blue-bd);
+    color: var(--blue); box-shadow: 0 0 14px rgba(0,180,255,0.12);
 }
 
 /* ── ALERTS ─────────────────────────────────────── */
@@ -442,7 +465,7 @@ div[data-testid="stAlert"] { background: var(--blue-lo) !important; border: 1px 
 </style>
 """, unsafe_allow_html=True)
 
-# ── Avatar CSS injection + sticky bar JS ──────────────────────────────────────
+# ── Avatar CSS injection ───────────────────────────────────────────────────────
 st.markdown(f"""
 <style>
 div[data-testid="chatAvatarIcon-assistant"] {{
@@ -454,32 +477,6 @@ div[data-testid="chatAvatarIcon-user"] {{
     background-color: #1a0000 !important;
 }}
 </style>
-<script>
-(function() {{
-    var _t;
-    function fix() {{
-        var ci = document.querySelector('[data-testid="stChatInput"]');
-        if (!ci) return;
-        var hb = ci.closest('[data-testid="stHorizontalBlock"]');
-        if (!hb) return;
-        var sb = document.querySelector('[data-testid="stSidebar"]');
-        var lft = sb ? Math.round(sb.getBoundingClientRect().right) : 0;
-        hb.style.setProperty('position', 'fixed', 'important');
-        hb.style.setProperty('bottom', '0', 'important');
-        hb.style.setProperty('left', lft + 'px', 'important');
-        hb.style.setProperty('right', '0', 'important');
-        hb.style.setProperty('z-index', '999', 'important');
-        hb.style.setProperty('padding', '10px 40px 26px', 'important');
-        hb.style.setProperty('gap', '8px', 'important');
-        hb.style.setProperty('align-items', 'flex-end', 'important');
-        hb.style.setProperty('background', 'linear-gradient(to top, #030b18 65%, transparent)', 'important');
-    }}
-    function sched() {{ clearTimeout(_t); _t = setTimeout(fix, 60); }}
-    fix();
-    new MutationObserver(sched).observe(document.body, {{childList: true, subtree: true}});
-    window.addEventListener('resize', sched);
-}})();
-</script>
 """, unsafe_allow_html=True)
 
 # ── Session state ─────────────────────────────────────────────────────────────
@@ -681,26 +678,28 @@ if st.session_state.show_upload:
 else:
     uploaded_file = None
 
-# ── Bottom bar ────────────────────────────────────────────────────────────────
-bc_new, bc_attach, bc_input = st.columns([1, 1, 14], gap="small")
+# ── Handle query-param actions from fixed HTML buttons ────────────────────────
+qp = st.query_params
+if qp.get("action") == "new":
+    st.query_params.clear()
+    go_to_tool(tool)
+    st.rerun()
+elif qp.get("action") == "attach":
+    st.query_params.clear()
+    st.session_state.show_upload = not st.session_state.show_upload
+    st.rerun()
 
-with bc_new:
-    st.markdown('<div id="spartan-bar-new">', unsafe_allow_html=True)
-    if st.button("↺", key="new_chat", help="New session"):
-        go_to_tool(tool)
-        st.rerun()
-    st.markdown('</div>', unsafe_allow_html=True)
+# ── Fixed HTML overlay — new session + attach buttons ─────────────────────────
+attach_label = "✕" if st.session_state.show_upload else "📎"
+st.markdown(f"""
+<div id="spartan-fixed-bar">
+  <a class="spartan-icon-btn" href="?action=new" title="New session">↺</a>
+  <a class="spartan-icon-btn" href="?action=attach" title="Attach file">{attach_label}</a>
+</div>
+""", unsafe_allow_html=True)
 
-with bc_attach:
-    st.markdown('<div id="spartan-bar-attach">', unsafe_allow_html=True)
-    attach_icon = "✕" if st.session_state.show_upload else "📎"
-    if st.button(attach_icon, key="attach_btn", help="Attach file"):
-        st.session_state.show_upload = not st.session_state.show_upload
-        st.rerun()
-    st.markdown('</div>', unsafe_allow_html=True)
-
-with bc_input:
-    user_input = st.chat_input("> _  message Spartan AI…")
+# ── Chat input (Streamlit renders this fixed at page bottom natively) ─────────
+user_input = st.chat_input("> _  message Spartan AI…")
 
 # ── Handle user input ─────────────────────────────────────────────────────────
 if user_input:
