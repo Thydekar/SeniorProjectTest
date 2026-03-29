@@ -567,7 +567,7 @@ def render_msg(raw, idx):
             st.download_button(f"↓ Download {fname}", data=fb, file_name=fname,
                                mime=mime, key=f"dl_{idx}_{si}")
 
-# ── Hidden nav trigger buttons — Streamlit handles state; JS (below) hides them ─
+# ── Hidden nav trigger buttons — hidden via CSS aria-label selectors below ─────
 _nav_cols = st.columns(len(TOOL_META) + 1)
 with _nav_cols[0]:
     if st.button("nav:Home", key="navbtn_Home"):
@@ -580,32 +580,29 @@ for _i, _name in enumerate(TOOL_META.keys(), start=1):
             go_tool(_name)
             st.rerun()
 
-# JS: collapse every column that holds a trigger button (runs after React renders)
-_HIDE_JS = (
-    '<script>'
-    '(function(){'
-    'var L=["nav:Home","nav:Assignment Generation","nav:Assignment Grader",'
-    '"nav:AI Content Detector","nav:Student Chatbot","\u21ba","\U0001F4CE"];'
-    'function h(){'
-    'window.parent.document.querySelectorAll("button").forEach(function(b){'
-    'if(L.indexOf(b.innerText.trim())!==-1){'
-    'var c=b.closest(\'[data-testid="column"]\');'
-    'if(c)c.style.display="none";'
-    '}});}'
-    'h();setTimeout(h,200);setTimeout(h,600);'
-    '})();'
-    '</script>'
-)
-st.markdown(_HIDE_JS, unsafe_allow_html=True)
+# CSS: hide trigger button columns by aria-label (same iframe — always works)
+st.markdown("""
+<style>
+[data-testid="stColumn"]:has(button[aria-label="nav:Home"]),
+[data-testid="stColumn"]:has(button[aria-label="nav:Assignment Generation"]),
+[data-testid="stColumn"]:has(button[aria-label="nav:Assignment Grader"]),
+[data-testid="stColumn"]:has(button[aria-label="nav:AI Content Detector"]),
+[data-testid="stColumn"]:has(button[aria-label="nav:Student Chatbot"]),
+[data-testid="stColumn"]:has(button[aria-label="↺"]),
+[data-testid="stColumn"]:has(button[aria-label="📎"]) {
+  display: none !important;
+}
+</style>
+""", unsafe_allow_html=True)
 
-# ── Top nav (HTML shell — JS above clicks the hidden Streamlit buttons) ────────
+# ── Top nav (HTML shell — uses document, same iframe as app) ───────────────────
 cur_mode = st.session_state.mode
 
 def _nav_js(label):
     return (
         "(function(){"
-        "var btns=window.parent.document.querySelectorAll('button');"
-        "for(var b of btns){if(b.innerText.trim()==='" + label + "'){b.click();return;}}"
+        "var btns=document.querySelectorAll('button[aria-label=\"" + label + "\"]');"
+        "if(btns.length)btns[0].click();"
         "})()"
     )
 
@@ -777,12 +774,10 @@ att_active = "active" if st.session_state.show_upload else ""
 st.markdown(f"""
 <div class="fab-group">
   <div class="fab" title="Attach file" onclick="(function(){{
-    var btns=window.parent.document.querySelectorAll('button');
-    for(var b of btns){{if(b.innerText.trim()==='📎'){{b.click();return;}}}}
+    var b=document.querySelector('button[aria-label=\\"📎\\"]');if(b)b.click();
   }})()">📎</div>
   <div class="fab" title="New chat" onclick="(function(){{
-    var btns=window.parent.document.querySelectorAll('button');
-    for(var b of btns){{if(b.innerText.trim()==='↺'){{b.click();return;}}}}
+    var b=document.querySelector('button[aria-label=\\"↺\\"]');if(b)b.click();
   }})()">↺</div>
 </div>
 """, unsafe_allow_html=True)
