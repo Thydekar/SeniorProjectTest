@@ -14,6 +14,7 @@ USERNAME        = "dgeurts"
 PASSWORD        = "thaidakar21"
 OCR_CONFIG      = r"--oem 3 --psm 6"
 AUTH            = (USERNAME, PASSWORD)
+LLAVA_MODEL     = "llava"   # change to e.g. "llava:13b" if you have a bigger variant
 
 MODEL_MAP = {
     "Assignment Generation": "spartan-generator",
@@ -80,15 +81,40 @@ def check_model_online(model_name: str) -> bool:
     return False
 
 
-def extract_text_from_image(image_bytes: bytes) -> str:
+def describe_image_with_llava(image_bytes: bytes, filename: str = "image") -> str:
+    """
+    Send an image to the local LLaVA model via Ollama and return a rich
+    text description that can be forwarded to the main text model.
+    Falls back to a base64 stub if LLaVA is unavailable.
+    """
+    b64 = base64.b64encode(image_bytes).decode()
+    payload = {
+        "model": LLAVA_MODEL,
+        "messages": [
+            {
+                "role": "user",
+                "content": (
+                    f'The user has attached an image called "{filename}". '
+                    "Please describe it thoroughly: what objects, people, text, "
+                    "colours, layout, and any other relevant details are present. "
+                    "Be specific and complete — your description will be the only "
+                    "information the downstream model receives about this image."
+                ),
+                "images": [b64],
+            }
+        ],
+        "stream": False,
+    }
     try:
-        import pytesseract
-        from PIL import Image
-        import io
-        img = Image.open(io.BytesIO(image_bytes))
-        return pytesseract.image_to_string(img, config=OCR_CONFIG)
+        r = requests.post(OLLAMA_CHAT_URL, auth=AUTH, json=payload, timeout=60)
+        r.raise_for_status()
+        data = r.json()
+        description = data.get("message", {}).get("content", "").strip()
+        if description:
+            return description
+        return "[LLaVA returned an empty description]"
     except Exception as e:
-        return f"[OCR error: {e}]"
+        return f"[LLaVA error — could not analyse image: {e}]"
 
 
 def build_user_content(text: str, file_info) -> str:
@@ -96,7 +122,9 @@ def build_user_content(text: str, file_info) -> str:
     if file_info:
         ext  = file_info["ext"]
         body = file_info["body"]
-        tag  = "image" if ext in IMAGE_EXTENSIONS else ext.lstrip(".")
+        # Images go through LLaVA so the body is a text description;
+        # we label it clearly so the model knows it came from an image.
+        tag = "image" if ext in IMAGE_EXTENSIONS else ext.lstrip(".")
         parts.append(f"[input-file-{tag}-text]\n{body}\n[/input-file-{tag}-text]")
     parts.append(f"[input-user-text]\n{text}\n[/input-user-text]")
     return "\n".join(parts)
@@ -497,13 +525,22 @@ hr.div { border:none; border-top:1px solid var(--glass-bdr); margin:2rem 0 1.6re
 
 .msgs { padding:1rem 0 0.5rem; }
 
-/* ── Chat bubbles — increased far margins for a centered feel ── */
-.row-user { display:flex; justify-content:flex-end;  margin:0.3rem 1.4rem 0.3rem 20rem; }
-.row-ai   { display:flex; justify-content:flex-start; margin:0.3rem 20rem 0.3rem 1.4rem; }
+/* ── Chat bubbles — percentage padding keeps them centered at any width ── */
+.row-user {
+    display:flex; justify-content:flex-end;
+    padding: 0.3rem 1.2rem 0.3rem 25%;
+    margin: 0;
+}
+.row-ai {
+    display:flex; justify-content:flex-start;
+    padding: 0.3rem 25% 0.3rem 1.2rem;
+    margin: 0;
+}
 
 .bubble {
     padding:0.5rem 0.85rem; border-radius:15px; font-size:0.92rem;
-    min-height:0; line-height:1.55; word-break:break-word; display:inline-block;
+    min-height:0; line-height:1.55; word-break:break-word;
+    display:inline-block; max-width:100%;
 }
 .bub-user {
     background:linear-gradient(135deg,rgba(0,255,136,0.13),rgba(0,170,80,0.07));
@@ -765,7 +802,12 @@ def render_chat():
         if upl is not None:
             ext  = Path(upl.name).suffix.lower()
             raw  = upl.read()
-            body = extract_text_from_image(raw) if ext in IMAGE_EXTENSIONS else raw.decode("utf-8", errors="replace")
+            if ext in IMAGE_EXTENSIONS:
+                with st.spinner(f"👁  LLaVA is analysing {upl.name}…"):
+                    body = describe_image_with_llava(raw, upl.name)
+                body = f"[Image analysed by LLaVA]\n{body}"
+            else:
+                body = raw.decode("utf-8", errors="replace")
             st.session_state.pending_file = {"name": upl.name, "ext": ext, "body": body}
             st.session_state.show_upload  = False
             st.rerun()
