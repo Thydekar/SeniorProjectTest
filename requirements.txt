@@ -1,6 +1,6 @@
-streamlit
-requests
-pytesseract
-Pillow
-PyPDF2
-python-docx
+flask>=3.0.0
+requests>=2.31.0
+Pillow>=10.0.0
+pytesseract>=0.3.10
+PyMuPDF>=1.23.0
+gunicorn>=21.2.0
