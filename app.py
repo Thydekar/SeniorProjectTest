@@ -50,6 +50,23 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
+# ── Custom SVG favicon (diamond matching the logo) ────────────────────────────
+_FAVICON_SVG = (
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">'
+    '<defs><linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%">'
+    '<stop offset="0%" stop-color="#00ff88"/>'
+    '<stop offset="50%" stop-color="#00cc6a"/>'
+    '<stop offset="100%" stop-color="#004433" stop-opacity="0.9"/>'
+    '</linearGradient></defs>'
+    '<polygon points="16,1 31,16 16,31 1,16" fill="url(#g)"/>'
+    '</svg>'
+)
+_FAVICON_B64 = base64.b64encode(_FAVICON_SVG.encode()).decode()
+st.markdown(
+    f'<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,{_FAVICON_B64}">',
+    unsafe_allow_html=True,
+)
+
 # ── Pure helpers ──────────────────────────────────────────────────────────────
 
 def check_model_online(model_name: str) -> bool:
@@ -198,10 +215,28 @@ def _file_segment_html(seg: dict) -> str:
     )
 
 
-def _file_generating_html(ft: str, fname: str) -> str:
-    """In-progress file — expandable spinner (can be opened while generating)."""
+def _file_generating_html(ft: str, fname: str, live_content: str = "") -> str:
+    """
+    In-progress file — auto-opened, shows live content as it streams in.
+    Updates in real time just like a text bubble.
+    """
+    if live_content:
+        content_escaped = html_lib.escape(live_content)
+        body_html = (
+            f'<div class="file-content-box file-content-live">'
+            f'{content_escaped}'
+            f'<span class="cur"></span>'
+            f'</div>'
+        )
+    else:
+        body_html = (
+            '<div class="file-content-box" style="opacity:.45;font-style:italic">'
+            'Writing content…'
+            '</div>'
+        )
+
     return (
-        f'<details class="file-details gen-active">'
+        f'<details class="file-details gen-active" open>'
         f'  <summary>'
         f'    <span class="sum-left">'
         f'      <span class="gen-spin"></span>'
@@ -210,7 +245,7 @@ def _file_generating_html(ft: str, fname: str) -> str:
         f'    </span>'
         f'    <span class="sum-toggle">▶</span>'
         f'  </summary>'
-        f'  <div class="file-content-box" style="opacity:.45;font-style:italic">Writing content…</div>'
+        f'  {body_html}'
         f'</details>'
     )
 
@@ -244,7 +279,7 @@ def build_streaming_html(raw: str) -> str:
     - Completed [output-text] block → rendered text, no cursor
     - In-progress [output-text] block (open tag, no close yet) → text + cursor
     - Completed [output-file-...] block → expandable download widget
-    - In-progress [output-file-...] block → expandable spinner (clickable)
+    - In-progress [output-file-...] block → auto-opened, live content + cursor
     - Bare text with no tags → text + cursor
     """
     parts = []
@@ -306,7 +341,9 @@ def build_streaming_html(raw: str) -> str:
                 parts.append(_file_segment_html(seg))
                 pos = close + len(close_tag)
             else:
-                parts.append(_file_generating_html(ft, fn))
+                # Pass the live in-progress content so the open panel shows it streaming
+                live_content = raw[open_end:].strip()
+                parts.append(_file_generating_html(ft, fn, live_content))
                 pos = n
 
     return "".join(parts)
@@ -460,9 +497,9 @@ hr.div { border:none; border-top:1px solid var(--glass-bdr); margin:2rem 0 1.6re
 
 .msgs { padding:1rem 0 0.5rem; }
 
-/* ── Chat bubbles ── */
-.row-user { display:flex; justify-content:flex-end;  margin:0.3rem 1.4rem 0.3rem 5rem; }
-.row-ai   { display:flex; justify-content:flex-start; margin:0.3rem 5rem 0.3rem 1.4rem; }
+/* ── Chat bubbles — increased far margins for a centered feel ── */
+.row-user { display:flex; justify-content:flex-end;  margin:0.3rem 1.4rem 0.3rem 20rem; }
+.row-ai   { display:flex; justify-content:flex-start; margin:0.3rem 20rem 0.3rem 1.4rem; }
 
 .bubble {
     padding:0.5rem 0.85rem; border-radius:15px; font-size:0.92rem;
@@ -518,6 +555,10 @@ details.file-details .file-content-box {
     border-top:1px solid rgba(0,255,136,0.1); padding:.6rem .8rem;
     max-height:280px; overflow-y:auto; white-space:pre-wrap; word-break:break-all;
     font-size:.75rem; color:rgba(200,255,224,0.7); line-height:1.6;
+}
+/* Live content box — slightly brighter while streaming */
+details.file-details .file-content-box.file-content-live {
+    color: rgba(200,255,224,0.88);
 }
 details.file-details .file-actions { display:flex; gap:.5rem; align-items:center; }
 details.file-details a { color:var(--green) !important; text-decoration:none !important; font-size:.74rem; white-space:nowrap; padding:2px 9px; border:1px solid rgba(0,255,136,0.28); border-radius:5px; }
@@ -683,7 +724,7 @@ def render_chat():
         render_message(msg)
     st.markdown('</div>', unsafe_allow_html=True)
 
-    # ── FIX: placeholders BEFORE the input bar so bubbles appear above it ──
+    # ── Placeholders BEFORE the input bar so bubbles appear above it ──
     user_bubble_ph = st.empty()
     think_ph       = st.empty()
     stream_ph      = st.empty()
@@ -749,7 +790,7 @@ def render_chat():
             else:
                 ollama_msgs.append({"role":"assistant","content":m.get("content","")})
 
-        # Fill user bubble (above input bar via placeholder)
+        # Show user bubble and thinking indicator
         user_bubble_ph.markdown(_user_bubble_html(user_input, file_att), unsafe_allow_html=True)
         think_ph.markdown(_thinking_html(), unsafe_allow_html=True)
 
@@ -762,7 +803,6 @@ def render_chat():
                 if not started:
                     think_ph.empty()
                     started = True
-                # build_streaming_html keeps text visible even while file is generating
                 inner = build_streaming_html(raw_response)
                 stream_ph.markdown(
                     f'<div class="row-ai"><div class="bubble bub-ai">{inner}</div></div>',
@@ -773,11 +813,19 @@ def render_chat():
             raw_response = f"[Connection error: {e}]"
 
         think_ph.empty()
-        stream_ph.empty()
 
-        segs = parse_output(raw_response)
+        # Parse segments and show the final, clean rendered version in the placeholder.
+        # We do NOT call st.rerun() here — this preserves anything the user has
+        # already started typing in the input box while generation was running.
+        segs  = parse_output(raw_response)
+        inner = _segments_to_html(segs)
+        stream_ph.markdown(
+            f'<div class="row-ai"><div class="bubble bub-ai">{inner}</div></div>',
+            unsafe_allow_html=True,
+        )
         st.session_state.messages.append({"role":"assistant","content":raw_response,"segments":segs})
-        st.rerun()
+        # No st.rerun() — the next user submission will trigger a natural rerun
+        # that re-renders the full history from session state correctly.
 
 
 # ── Router ────────────────────────────────────────────────────────────────────
