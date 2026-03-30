@@ -109,15 +109,12 @@ def _strip_tags(s: str) -> str:
     s = re.sub(r'\[/?input-[^\]]+\]', '', s)
     s = re.sub(r'\[output-file-[^\]]+\]', '', s)
     s = re.sub(r'\[/output-file-[^\]]+\]', '', s)
+    # FIX: collapse runs of blank lines left after tag removal
+    s = re.sub(r'\n{3,}', '\n\n', s)
     return s.strip()
 
 
 def parse_output(raw: str) -> list:
-    """
-    Split raw AI response into typed segments.
-    All protocol tags are stripped; text content is always clean.
-    Returns: list of {"type": "text"|"file", ...}
-    """
     file_pat = re.compile(
         r'\[output-file-([a-zA-Z0-9]+)-([^\]]+)\](.*?)\[/output-file-\1-\2\]',
         re.DOTALL,
@@ -142,7 +139,7 @@ def parse_output(raw: str) -> list:
                 "filename": m.group(2),
                 "content":  m.group(3).strip(),
             })
-        else:  # output-text block
+        else:
             txt = _strip_tags(m.group(1))
             if txt:
                 segments.append({"type": "text", "content": txt})
@@ -159,8 +156,10 @@ def parse_output(raw: str) -> list:
     return segments
 
 
+# FIX: strip leading/trailing whitespace before escaping so short messages
+# like "hi" don't get wrapped in extra <br> tags
 def safe_html(text: str) -> str:
-    return html_lib.escape(str(text)).replace("\n", "<br>")
+    return html_lib.escape(str(text).strip()).replace("\n", "<br>")
 
 
 # ── CSS ───────────────────────────────────────────────────────────────────────
@@ -216,6 +215,17 @@ html, body, [data-testid="stAppViewContainer"] {
 
 .block-container { padding:0 !important; max-width:100% !important; }
 [data-testid="stMainBlockContainer"] { padding:0 !important; }
+
+/* FIX: remove any background/border from Streamlit's bottom bar wrapper
+   that was showing as a black bar in front of the text input */
+[data-testid="stBottom"] {
+    background: transparent !important;
+    border-top: none !important;
+    padding: 0 !important;
+}
+[data-testid="stBottom"] > div {
+    background: transparent !important;
+}
 
 /* Scrollbar */
 ::-webkit-scrollbar { width:4px; }
@@ -289,6 +299,7 @@ hr.div { border:none; border-top:1px solid var(--glass-bdr); margin:2rem 0 1.6re
     font-size: 0.8rem !important;
     letter-spacing: 0.04em !important;
     transition: all 0.18s !important;
+    white-space: nowrap !important;
 }
 .stButton > button:hover {
     background: rgba(0,255,136,0.1) !important;
@@ -314,16 +325,27 @@ hr.div { border:none; border-top:1px solid var(--glass-bdr); margin:2rem 0 1.6re
 }
 .hdr-status { display:flex; align-items:center; gap:5px; font-family:var(--mono); font-size:0.68rem; }
 
-/* Messages */
-.msgs { padding:1rem 1.3rem 0.5rem; }
+/* Messages — FIX: equal horizontal padding on both sides */
+.msgs { padding:1rem 0 0.5rem; }
 
-/* ── Chat bubbles ── */
-.row-user { display:flex; justify-content:flex-end; margin:0.4rem 0; }
-.row-ai   { display:flex; justify-content:flex-start; margin:0.4rem 0; }
+/* ── Chat bubbles — FIX: equal margins from both edges ── */
+.row-user {
+    display:flex; justify-content:flex-end;
+    margin:0.35rem 1.5rem 0.35rem 4rem;   /* left margin larger to prevent hugging left edge */
+}
+.row-ai {
+    display:flex; justify-content:flex-start;
+    margin:0.35rem 4rem 0.35rem 1.5rem;   /* right margin larger to match */
+}
 
 .bubble {
-    max-width:70%; padding:0.6rem 0.95rem;
-    border-radius:15px; font-size:0.93rem; line-height:1.65; word-break:break-word;
+    /* FIX: no max-width percentage — let the margins define the width boundary */
+    padding:0.55rem 0.9rem;
+    border-radius:15px; font-size:0.93rem;
+    /* FIX: use min-height:0 and no forced line-height expansion on empty content */
+    min-height: 0;
+    line-height:1.55; word-break:break-word;
+    display:inline-block;
 }
 .bub-user {
     background:linear-gradient(135deg,rgba(0,255,136,0.13),rgba(0,170,80,0.07));
@@ -367,7 +389,7 @@ hr.div { border:none; border-top:1px solid var(--glass-bdr); margin:2rem 0 1.6re
     vertical-align:text-bottom; margin-left:2px; border-radius:1px;
 }
 
-/* File widget */
+/* ── File widget — FIX: clickable <details> expand ── */
 .file-wgt {
     display:flex; align-items:center; justify-content:space-between; gap:.7rem;
     padding:.5rem .85rem;
@@ -383,6 +405,48 @@ hr.div { border:none; border-top:1px solid var(--glass-bdr); margin:2rem 0 1.6re
 }
 .file-wgt a:hover { background:rgba(0,255,136,0.1) !important; }
 
+/* Clickable file details widget */
+details.file-details {
+    margin-top:.45rem;
+    background:rgba(0,255,136,0.03);
+    border:1px solid rgba(0,255,136,0.2);
+    border-radius:9px;
+    font-family:var(--mono); font-size:0.78rem;
+    overflow:hidden;
+}
+details.file-details summary {
+    display:flex; align-items:center; justify-content:space-between;
+    padding:.5rem .85rem;
+    cursor:pointer; list-style:none; gap:.7rem;
+    color:var(--text-dim);
+    user-select:none;
+}
+details.file-details summary::-webkit-details-marker { display:none; }
+details.file-details summary:hover { background:rgba(0,255,136,0.04); }
+details.file-details summary .sum-left { display:flex; align-items:center; gap:.5rem; flex:1; }
+details.file-details summary .sum-toggle {
+    font-size:.65rem; color:var(--green); opacity:.7;
+    transition:transform .2s;
+}
+details.file-details[open] summary .sum-toggle { transform:rotate(90deg); }
+details.file-details .file-content-box {
+    border-top:1px solid rgba(0,255,136,0.1);
+    padding:.65rem .85rem;
+    max-height:280px; overflow-y:auto;
+    white-space:pre-wrap; word-break:break-all;
+    font-size:.76rem; color:rgba(200,255,224,0.7);
+    line-height:1.6;
+}
+details.file-details .file-actions {
+    display:flex; gap:.5rem; align-items:center;
+}
+details.file-details a {
+    color:var(--green) !important; text-decoration:none !important;
+    font-size:.75rem; white-space:nowrap;
+    padding:2px 9px; border:1px solid rgba(0,255,136,0.28); border-radius:5px;
+}
+details.file-details a:hover { background:rgba(0,255,136,0.1) !important; }
+
 /* Generating spinner */
 @keyframes spin { to{transform:rotate(360deg)} }
 .gen-spin {
@@ -391,18 +455,28 @@ hr.div { border:none; border-top:1px solid var(--glass-bdr); margin:2rem 0 1.6re
     border-radius:50%; animation:spin .75s linear infinite; flex-shrink:0;
 }
 
-/* ── Input area ── */
-.input-area {
-    position:sticky; bottom:0;
-    background:rgba(2,10,5,0.95);
+/* ── Input area — FIX: clean sticky bar, no black overlay ── */
+.input-area-wrap {
+    position:sticky; bottom:0; z-index:150;
+    background:rgba(2,10,5,0.96);
     border-top:1px solid var(--glass-bdr);
-    backdrop-filter:blur(20px);
-    padding:0.6rem 1.3rem 0.75rem;
-    z-index:150;
+    backdrop-filter:blur(22px); -webkit-backdrop-filter:blur(22px);
+    padding:0.55rem 1.1rem 0.7rem;
+    box-shadow:0 -4px 24px rgba(0,0,0,0.45);
+}
+
+/* Row that holds buttons + chat input side by side */
+.input-row {
+    display:flex; align-items:center; gap:0.5rem;
 }
 
 /* Chat input */
-[data-testid="stChatInputContainer"] { background:transparent !important; border:none !important; padding:0 !important; }
+[data-testid="stChatInputContainer"] {
+    background:transparent !important;
+    border:none !important;
+    padding:0 !important;
+    flex:1;
+}
 [data-testid="stChatInput"] {
     background:rgba(4,14,8,0.92) !important;
     border:1px solid var(--glass-bdr) !important;
@@ -414,16 +488,27 @@ hr.div { border:none; border-top:1px solid var(--glass-bdr); margin:2rem 0 1.6re
     border-color:rgba(0,255,136,0.4) !important;
     box-shadow:0 0 18px rgba(0,255,136,0.1) !important;
 }
-[data-testid="stChatInput"] textarea { color:var(--text) !important; font-family:var(--mono) !important; font-size:.88rem !important; }
+[data-testid="stChatInput"] textarea {
+    color:var(--text) !important; font-family:var(--mono) !important; font-size:.88rem !important;
+}
 [data-testid="stChatInput"] button { color:var(--green) !important; }
 
-/* File uploader */
+/* File uploader in collapsed area */
+.upload-collapse {
+    margin-top:.45rem;
+    padding:.5rem .6rem;
+    background:rgba(0,255,136,0.02);
+    border:1px dashed rgba(0,255,136,0.14);
+    border-radius:8px;
+}
 [data-testid="stFileUploaderDropzone"] {
     background:rgba(0,255,136,0.02) !important;
     border:1px dashed rgba(0,255,136,0.18) !important;
     border-radius:8px !important;
 }
-[data-testid="stFileUploaderDropzone"] * { color:var(--text-dim) !important; font-family:var(--mono) !important; font-size:.78rem !important; }
+[data-testid="stFileUploaderDropzone"] * {
+    color:var(--text-dim) !important; font-family:var(--mono) !important; font-size:.78rem !important;
+}
 [data-testid="stFileUploadDeleteBtn"] button { color:var(--red) !important; }
 
 /* Pending badge */
@@ -432,11 +517,18 @@ hr.div { border:none; border-top:1px solid var(--glass-bdr); margin:2rem 0 1.6re
     font-family:var(--mono); font-size:0.7rem;
     color:var(--green); background:rgba(0,255,136,0.05);
     border:1px solid rgba(0,255,136,0.2); border-radius:999px; padding:2px 10px 2px 7px;
-    margin-top:5px;
 }
 
 /* Home footer */
 .hm-footer { text-align:center; margin-top:2.5rem; font-family:var(--mono); font-size:0.65rem; color:var(--text-dim); letter-spacing:.15em; }
+
+/* FIX: column gap tightening in input row */
+[data-testid="stHorizontalBlock"] { gap:0.4rem !important; align-items:center !important; }
+/* Keep column buttons from adding extra top margin */
+[data-testid="stColumn"] > div { margin:0 !important; }
+/* Remove default Streamlit element margin inside input row columns */
+.input-area-wrap .stButton { margin:0 !important; }
+.input-area-wrap [data-testid="stVerticalBlock"] { gap:0 !important; }
 </style>
 """
 
@@ -461,6 +553,11 @@ def go_home():
 def go_chat(label):
     for k, v in {"page":"chat","active_model":label,"messages":[],"pending_file":None,"show_upload":False}.items():
         st.session_state[k] = v
+
+def new_chat():
+    st.session_state.messages   = []
+    st.session_state.pending_file = None
+    st.session_state.show_upload  = False
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -518,7 +615,7 @@ def render_home():
 #  CHAT — bubble renderers
 # ─────────────────────────────────────────────────────────────────────────────
 def _render_user_bubble(content: str, file_att):
-    txt      = safe_html(content)
+    txt = safe_html(content)
     file_htm = ""
     if file_att:
         file_htm = (
@@ -535,23 +632,40 @@ def _render_user_bubble(content: str, file_att):
     )
 
 
+def _file_segment_html(seg: dict) -> str:
+    """
+    FIX: render a completed file segment as a clickable <details> widget
+    that expands to show the file content inline, with a download link.
+    """
+    ft    = seg["filetype"]
+    fname = html_lib.escape(seg["filename"])
+    raw   = seg["content"]
+    enc   = base64.b64encode(raw.encode()).decode()
+    # escape content for safe display inside <pre>
+    content_escaped = html_lib.escape(raw)
+    return (
+        f'<details class="file-details">'
+        f'  <summary>'
+        f'    <span class="sum-left">📄 {fname} <span style="opacity:.5;margin-left:.4rem">({ft.upper()})</span></span>'
+        f'    <span class="file-actions">'
+        f'      <a href="data:text/plain;base64,{enc}" download="{seg["filename"]}">⬇ Download</a>'
+        f'    </span>'
+        f'    <span class="sum-toggle">▶</span>'
+        f'  </summary>'
+        f'  <div class="file-content-box">{content_escaped}</div>'
+        f'</details>'
+    )
+
+
 def _segments_to_html(segments: list) -> str:
     parts = []
     for seg in segments:
         if seg["type"] == "text":
             t = safe_html(seg["content"])
             if t:
-                parts.append(f'<div style="margin-bottom:.35rem">{t}</div>')
+                parts.append(f'<div style="margin-bottom:.3rem">{t}</div>')
         elif seg["type"] == "file":
-            ft    = seg["filetype"]
-            fname = html_lib.escape(seg["filename"])
-            enc   = base64.b64encode(seg["content"].encode()).decode()
-            parts.append(
-                f'<div class="file-wgt">'
-                f'<span>📄 {fname} <span style="opacity:.5">({ft.upper()})</span></span>'
-                f'<a href="data:text/plain;base64,{enc}" download="{seg["filename"]}">⬇ Download</a>'
-                f'</div>'
-            )
+            parts.append(_file_segment_html(seg))
     return "".join(parts)
 
 
@@ -569,7 +683,7 @@ def render_message(msg: dict):
 
 def _thinking_html():
     return (
-        '<div class="row-ai"><div class="bubble bub-ai" style="padding:.6rem .95rem">'
+        '<div class="row-ai"><div class="bubble bub-ai" style="padding:.55rem .9rem">'
         '<div class="thinking"><span></span><span></span><span></span></div>'
         '</div></div>'
     )
@@ -615,43 +729,53 @@ def render_chat():
         </div>
     </div>""", unsafe_allow_html=True)
 
-    # ── Home button ──
-    tb_l, _ = st.columns([1, 9])
-    with tb_l:
-        if st.button("⟵ Home", key="btn_home"):
-            go_home(); st.rerun()
-
     # ── Message history ──
     st.markdown('<div class="msgs">', unsafe_allow_html=True)
     for msg in st.session_state.messages:
         render_message(msg)
     st.markdown('</div>', unsafe_allow_html=True)
 
-    # ── Input area ──
-    st.markdown('<div class="input-area">', unsafe_allow_html=True)
+    # ── Fixed input area ──
+    # Wrap everything in our sticky bar div
+    st.markdown('<div class="input-area-wrap">', unsafe_allow_html=True)
 
-    user_input = st.chat_input("Message Spartan AI…", key="chat_input")
+    # FIX: single row — [⟵ Home] [↺ New Chat] [  chat input  ] [📎 Attach]
+    col_home, col_new, col_inp, col_att = st.columns([1, 1, 10, 1])
 
-    # Attach button + pending badge
-    btn_col, badge_col = st.columns([1, 7])
-    with btn_col:
-        if st.button("📎 Attach", key="toggle_up"):
+    with col_home:
+        if st.button("⟵", key="btn_home", help="Back to Home"):
+            go_home(); st.rerun()
+
+    with col_new:
+        if st.button("↺", key="btn_new", help="New Chat"):
+            new_chat(); st.rerun()
+
+    with col_inp:
+        user_input = st.chat_input("Message Spartan AI…", key="chat_input")
+
+    with col_att:
+        if st.button("📎", key="toggle_up", help="Attach File"):
             st.session_state.show_upload = not st.session_state.show_upload
-    with badge_col:
-        if st.session_state.pending_file:
-            st.markdown(
-                f'<div style="padding-top:5px">'
-                f'<span class="pending">📎 {html_lib.escape(st.session_state.pending_file["name"])}</span>'
-                f'</div>',
-                unsafe_allow_html=True,
-            )
+            st.rerun()
 
+    # Pending file badge
+    if st.session_state.pending_file:
+        st.markdown(
+            f'<div style="margin-top:4px">'
+            f'<span class="pending">📎 {html_lib.escape(st.session_state.pending_file["name"])}</span>'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
+
+    # FIX: collapsed file uploader lives inside the same sticky bar
     if st.session_state.show_upload:
+        st.markdown('<div class="upload-collapse">', unsafe_allow_html=True)
         upl = st.file_uploader(
-            "Attach file — used in your next message only",
+            "Attach — used in your next message only",
             key="file_uploader",
             label_visibility="collapsed",
         )
+        st.markdown('</div>', unsafe_allow_html=True)
         if upl is not None:
             ext  = Path(upl.name).suffix.lower()
             raw  = upl.read()
@@ -660,7 +784,7 @@ def render_chat():
             st.session_state.show_upload  = False
             st.rerun()
 
-    st.markdown('</div>', unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)  # close input-area-wrap
 
     # ── Handle send ──
     if user_input:
@@ -689,11 +813,11 @@ def render_chat():
 
         think_ph.markdown(_thinking_html(), unsafe_allow_html=True)
 
-        raw_response    = ""
-        in_file_block   = False
-        file_ft         = ""
-        file_fn         = ""
-        started         = False
+        raw_response  = ""
+        in_file_block = False
+        file_ft       = ""
+        file_fn       = ""
+        started       = False
 
         try:
             for token in stream_chat(model_id, ollama_msgs):
@@ -703,7 +827,6 @@ def render_chat():
                     think_ph.empty()
                     started = True
 
-                # Detect file block open
                 if not in_file_block:
                     fm = re.search(r'\[output-file-([a-zA-Z0-9]+)-([^\]]+)\]', raw_response)
                     if fm:
@@ -713,7 +836,6 @@ def render_chat():
                         if closing not in raw_response:
                             in_file_block = True
 
-                # Detect file block close
                 if in_file_block:
                     closing = f'[/output-file-{file_ft}-{file_fn}]'
                     if closing in raw_response:
