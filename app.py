@@ -453,7 +453,6 @@ CSS = """
 :root {
     --green:       #00ff88;
     --green-dim:   #00cc6a;
-    --green-glow:  rgba(0,255,136,0.18);
     --red:         #ff4455;
     --glass-bg:    rgba(8,18,12,0.80);
     --glass-bdr:   rgba(0,255,136,0.14);
@@ -463,7 +462,7 @@ CSS = """
     --text-dim:    #4a7560;
     --mono:        'Share Tech Mono', monospace;
     --sans:        'Rajdhani', sans-serif;
-    --bar-h:       68px;
+    --bar-h:       62px;
 }
 
 html, body, [data-testid="stAppViewContainer"] {
@@ -497,19 +496,18 @@ html, body, [data-testid="stAppViewContainer"] {
 ::-webkit-scrollbar-track { background:transparent; }
 ::-webkit-scrollbar-thumb { background:rgba(0,255,136,0.16); border-radius:2px; }
 
-/* ── stBottom: make it always-visible, styled as our input bar ── */
+/* ── stBottom: always pinned to viewport bottom, styled as the input bar ── */
 [data-testid="stBottom"] {
     position: fixed !important;
-    bottom: 0 !important;
-    left: 0 !important;
-    right: 0 !important;
+    bottom: 0 !important; left: 0 !important; right: 0 !important;
     z-index: 150 !important;
     background: rgba(2,10,5,0.97) !important;
     border-top: 1px solid var(--glass-bdr) !important;
     backdrop-filter: blur(22px) !important;
     -webkit-backdrop-filter: blur(22px) !important;
     box-shadow: 0 -4px 24px rgba(0,0,0,0.5) !important;
-    padding: 0.45rem 1rem 0.55rem 110px !important; /* left gap for nav buttons */
+    /* leave room on the left for the three nav buttons */
+    padding: 0.45rem 1rem 0.5rem 118px !important;
 }
 [data-testid="stBottom"] > div {
     background: transparent !important;
@@ -518,33 +516,37 @@ html, body, [data-testid="stAppViewContainer"] {
     box-shadow: none !important;
 }
 
-/* ── Nav button cluster (fixed bottom-left) ── */
-.bottom-nav {
-    position: fixed;
-    bottom: 12px;
-    left: 10px;
-    z-index: 200;
-    display: flex;
-    flex-direction: row;
-    gap: 6px;
-    align-items: center;
-}
-.bottom-nav [data-testid="stHorizontalBlock"] {
-    gap: 6px !important;
-    align-items: center !important;
+/* ── Nav buttons: the stHorizontalBlock immediately after #nav-anchor ──
+   This is the reliable way to target exactly our button row since Streamlit
+   ignores custom div wrappers around its own components.               ── */
+#nav-anchor + [data-testid="stHorizontalBlock"] {
+    position: fixed !important;
+    bottom: 10px !important;
+    left: 8px !important;
+    z-index: 300 !important;
+    width: auto !important;
+    gap: 5px !important;
     flex-wrap: nowrap !important;
 }
-.bottom-nav [data-testid="stColumn"] > div { margin: 0 !important; }
-.bottom-nav .stButton > button {
-    width: 38px !important;
-    height: 38px !important;
+#nav-anchor + [data-testid="stHorizontalBlock"] [data-testid="stColumn"] {
+    width: auto !important;
+    flex: 0 0 auto !important;
+    min-width: 0 !important;
+    padding: 0 !important;
+}
+#nav-anchor + [data-testid="stHorizontalBlock"] [data-testid="stColumn"] > div {
+    margin: 0 !important;
+}
+#nav-anchor + [data-testid="stHorizontalBlock"] .stButton > button {
+    width: 40px !important;
+    height: 40px !important;
     padding: 0 !important;
     border-radius: 50% !important;
-    font-size: 1rem !important;
+    font-size: 1.05rem !important;
+    line-height: 1 !important;
     display: flex !important;
     align-items: center !important;
     justify-content: center !important;
-    letter-spacing: 0 !important;
 }
 
 /* ── Chat input widget ── */
@@ -561,23 +563,6 @@ html, body, [data-testid="stAppViewContainer"] {
 [data-testid="stChatInput"] textarea { color:var(--text) !important; font-family:var(--mono) !important; font-size:.87rem !important; }
 [data-testid="stChatInput"] button { color:var(--green) !important; }
 
-/* ── Attach / pending area (fixed just above stBottom) ── */
-.attach-bar {
-    position: fixed;
-    bottom: var(--bar-h);
-    left: 0;
-    right: 0;
-    z-index: 148;
-    background: rgba(2,10,5,0.96);
-    border-top: 1px solid rgba(0,255,136,0.08);
-    padding: 0.4rem 1rem;
-}
-.upload-collapse { padding:.35rem .4rem; background:rgba(0,255,136,0.02); border:1px dashed rgba(0,255,136,0.14); border-radius:8px; }
-[data-testid="stFileUploaderDropzone"] { background:rgba(0,255,136,0.02) !important; border:1px dashed rgba(0,255,136,0.18) !important; border-radius:8px !important; }
-[data-testid="stFileUploaderDropzone"] * { color:var(--text-dim) !important; font-family:var(--mono) !important; font-size:.77rem !important; }
-[data-testid="stFileUploadDeleteBtn"] button { color:var(--red) !important; }
-.pending { display:inline-flex; align-items:center; gap:5px; font-family:var(--mono); font-size:0.7rem; color:var(--green); background:rgba(0,255,136,0.05); border:1px solid rgba(0,255,136,0.2); border-radius:999px; padding:2px 10px 2px 7px; }
-
 /* ── Global button styles ── */
 .stButton > button {
     background: rgba(0,255,136,0.04) !important; color: var(--green) !important;
@@ -591,6 +576,20 @@ html, body, [data-testid="stAppViewContainer"] {
     box-shadow: 0 0 16px rgba(0,255,136,0.15) !important;
 }
 .stButton > button:active { transform:scale(0.97) !important; }
+
+/* ── Attach / pending strip (slides in just above the bar) ── */
+.attach-bar {
+    position: fixed; bottom: var(--bar-h); left: 0; right: 0;
+    z-index: 148;
+    background: rgba(2,10,5,0.96);
+    border-top: 1px solid rgba(0,255,136,0.08);
+    padding: 0.35rem 1rem;
+}
+.upload-collapse { padding:.3rem .4rem; background:rgba(0,255,136,0.02); border:1px dashed rgba(0,255,136,0.14); border-radius:8px; }
+[data-testid="stFileUploaderDropzone"] { background:rgba(0,255,136,0.02) !important; border:1px dashed rgba(0,255,136,0.18) !important; border-radius:8px !important; }
+[data-testid="stFileUploaderDropzone"] * { color:var(--text-dim) !important; font-family:var(--mono) !important; font-size:.77rem !important; }
+[data-testid="stFileUploadDeleteBtn"] button { color:var(--red) !important; }
+.pending { display:inline-flex; align-items:center; gap:5px; font-family:var(--mono); font-size:0.7rem; color:var(--green); background:rgba(0,255,136,0.05); border:1px solid rgba(0,255,136,0.2); border-radius:999px; padding:2px 10px 2px 7px; }
 
 /* ── Home page ── */
 .home-wrap { padding:3rem 2rem 2rem; max-width:860px; margin:0 auto; }
@@ -611,33 +610,12 @@ html, body, [data-testid="stAppViewContainer"] {
     0%,100% { box-shadow: 0 0 18px var(--green), 0 0 40px rgba(0,255,136,0.3); }
     50%      { box-shadow: 0 0 30px var(--green), 0 0 65px rgba(0,255,136,0.5); }
 }
-.home-byline {
-    font-family: var(--mono); font-size: 0.68rem; color: var(--text-dim);
-    letter-spacing: 0.28em; text-transform: uppercase;
-    text-align: center; margin-top:0.45rem;
-}
-.home-desc {
-    font-family: var(--sans); font-size: 1rem;
-    color: rgba(200,255,224,0.72); text-align:center;
-    max-width: 540px; margin: 1.5rem auto 0; line-height:1.75;
-}
+.home-byline { font-family:var(--mono); font-size:0.68rem; color:var(--text-dim); letter-spacing:0.28em; text-transform:uppercase; text-align:center; margin-top:0.45rem; }
+.home-desc { font-family:var(--sans); font-size:1rem; color:rgba(200,255,224,0.72); text-align:center; max-width:540px; margin:1.5rem auto 0; line-height:1.75; }
 hr.div { border:none; border-top:1px solid var(--glass-bdr); margin:2rem 0 1.6rem; }
-.sec-label {
-    font-family:var(--mono); font-size:0.66rem; color:var(--text-dim);
-    letter-spacing:0.3em; text-transform:uppercase; text-align:center; margin-bottom:1.3rem;
-}
-.model-card {
-    background: var(--glass-bg); border: 1px solid var(--glass-bdr);
-    backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
-    border-radius: 14px; padding: 1.2rem 1.1rem 1rem;
-    position: relative; overflow:hidden;
-    box-shadow: 0 4px 22px rgba(0,0,0,0.5), 0 0 0 1px var(--glass-shine) inset;
-    margin-bottom: 0.35rem;
-}
-.model-card::before {
-    content:''; position:absolute; top:0; left:0; right:0; height:1px;
-    background: linear-gradient(90deg,transparent,var(--green),transparent); opacity:0.35;
-}
+.sec-label { font-family:var(--mono); font-size:0.66rem; color:var(--text-dim); letter-spacing:0.3em; text-transform:uppercase; text-align:center; margin-bottom:1.3rem; }
+.model-card { background:var(--glass-bg); border:1px solid var(--glass-bdr); backdrop-filter:blur(18px); -webkit-backdrop-filter:blur(18px); border-radius:14px; padding:1.2rem 1.1rem 1rem; position:relative; overflow:hidden; box-shadow:0 4px 22px rgba(0,0,0,0.5),0 0 0 1px var(--glass-shine) inset; margin-bottom:0.35rem; }
+.model-card::before { content:''; position:absolute; top:0; left:0; right:0; height:1px; background:linear-gradient(90deg,transparent,var(--green),transparent); opacity:0.35; }
 .card-icon  { font-size:1.6rem; line-height:1; margin-bottom:0.4rem; }
 .card-title { font-family:var(--sans); font-weight:700; font-size:1rem; color:var(--green); letter-spacing:0.04em; margin-bottom:0.25rem; }
 .card-desc  { font-family:var(--sans); font-size:0.84rem; color:var(--text-dim); line-height:1.5; }
@@ -650,34 +628,31 @@ hr.div { border:none; border-top:1px solid var(--glass-bdr); margin:2rem 0 1.6re
 .hm-footer { text-align:center; margin-top:2.5rem; font-family:var(--mono); font-size:0.65rem; color:var(--text-dim); letter-spacing:.15em; }
 
 /* ── Chat header ── */
-.chat-hdr {
-    display:flex; align-items:center; gap:0.75rem;
-    padding:0.55rem 1.3rem; background:rgba(2,10,5,0.95);
-    border-bottom:1px solid var(--glass-bdr); backdrop-filter:blur(20px);
-    position:sticky; top:0; z-index:200; box-shadow:0 2px 16px rgba(0,0,0,0.4);
-}
+.chat-hdr { display:flex; align-items:center; gap:0.75rem; padding:0.55rem 1.3rem; background:rgba(2,10,5,0.95); border-bottom:1px solid var(--glass-bdr); backdrop-filter:blur(20px); position:sticky; top:0; z-index:200; box-shadow:0 2px 16px rgba(0,0,0,0.4); }
 .hdr-icon  { font-size:1.1rem; line-height:1; }
 .hdr-title { font-family:var(--mono); font-size:0.92rem; color:var(--green); text-shadow:0 0 10px rgba(0,255,136,0.4); flex:1; }
 .hdr-status { display:flex; align-items:center; gap:5px; font-family:var(--mono); font-size:0.68rem; }
 
-/* ── Messages area: add bottom padding so content clears the fixed bar ── */
-.msgs { padding:1rem 0 calc(var(--bar-h) + 20px); }
+/* ── Messages: enough bottom padding to fully clear the fixed bar ── */
+.msgs { padding: 1rem 0 90px; }
 
-/* ── Chat bubbles ── */
+/* ── Chat bubbles: max-width cap + breathing room on both sides ── */
 .row-user {
     display:flex; justify-content:flex-end;
-    padding: 0.3rem 1.2rem 0.3rem 25%;
+    padding: 0.25rem 1.4rem 0.25rem 1.4rem;
     margin: 0;
 }
 .row-ai {
     display:flex; justify-content:flex-start;
-    padding: 0.3rem 25% 0.3rem 1.2rem;
+    padding: 0.25rem 1.4rem 0.25rem 1.4rem;
     margin: 0;
 }
 .bubble {
-    padding:0.5rem 0.85rem; border-radius:15px; font-size:0.92rem;
-    min-height:0; line-height:1.55; word-break:break-word;
-    display:inline-block; max-width:100%;
+    padding: 0.5rem 0.85rem; border-radius: 15px; font-size: 0.92rem;
+    min-height: 0; line-height: 1.55; word-break: break-word;
+    display: inline-block;
+    /* bubbles never wider than 68% of the viewport — prevents edge-to-edge */
+    max-width: 68%;
 }
 .bub-user {
     background:linear-gradient(135deg,rgba(0,255,136,0.13),rgba(0,170,80,0.07));
@@ -690,11 +665,7 @@ hr.div { border:none; border-top:1px solid var(--glass-bdr); margin:2rem 0 1.6re
     border-bottom-left-radius:4px; box-shadow:0 2px 10px rgba(0,0,0,0.3);
 }
 .attach-row { display:flex; justify-content:flex-end; margin-top:3px; }
-.attach-pill {
-    font-family:var(--mono); font-size:0.69rem; color:var(--text-dim);
-    background:rgba(0,255,136,0.04); border:1px solid rgba(0,255,136,0.16);
-    border-radius:999px; padding:2px 10px;
-}
+.attach-pill { font-family:var(--mono); font-size:0.69rem; color:var(--text-dim); background:rgba(0,255,136,0.04); border:1px solid rgba(0,255,136,0.16); border-radius:999px; padding:2px 10px; }
 
 /* Thinking dots */
 @keyframes pd { 0%,80%,100%{opacity:.2;transform:scale(.8)} 40%{opacity:1;transform:scale(1)} }
@@ -703,48 +674,27 @@ hr.div { border:none; border-top:1px solid var(--glass-bdr); margin:2rem 0 1.6re
 .thinking span:nth-child(2) { animation-delay:.2s; }
 .thinking span:nth-child(3) { animation-delay:.4s; }
 
-/* Streaming cursor */
+/* Cursor */
 @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
 .cur { display:inline-block; width:2px; height:.9em; background:var(--green); animation:blink .85s step-end infinite; vertical-align:text-bottom; margin-left:2px; border-radius:1px; }
 
 /* ── File details widget ── */
-details.file-details {
-    margin-top:.4rem; background:rgba(0,255,136,0.03);
-    border:1px solid rgba(0,255,136,0.2); border-radius:9px;
-    font-family:var(--mono); font-size:0.78rem; overflow:hidden;
-}
+details.file-details { margin-top:.4rem; background:rgba(0,255,136,0.03); border:1px solid rgba(0,255,136,0.2); border-radius:9px; font-family:var(--mono); font-size:0.78rem; overflow:hidden; }
 details.file-details.gen-active { border-color:rgba(0,255,136,0.15); }
-details.file-details summary {
-    display:flex; align-items:center; justify-content:space-between;
-    padding:.45rem .8rem; cursor:pointer; list-style:none; gap:.7rem;
-    color:var(--text-dim); user-select:none;
-}
+details.file-details summary { display:flex; align-items:center; justify-content:space-between; padding:.45rem .8rem; cursor:pointer; list-style:none; gap:.7rem; color:var(--text-dim); user-select:none; }
 details.file-details summary::-webkit-details-marker { display:none; }
 details.file-details summary:hover { background:rgba(0,255,136,0.04); }
 details.file-details summary .sum-left { display:flex; align-items:center; gap:.5rem; flex:1; flex-wrap:wrap; }
 details.file-details summary .sum-toggle { font-size:.62rem; color:var(--green); opacity:.7; transition:transform .2s; flex-shrink:0; }
 details.file-details[open] summary .sum-toggle { transform:rotate(90deg); }
-details.file-details .file-content-box {
-    border-top:1px solid rgba(0,255,136,0.1); padding:.6rem .8rem;
-    max-height:280px; overflow-y:auto; white-space:pre-wrap; word-break:break-all;
-    font-size:.75rem; color:rgba(200,255,224,0.7); line-height:1.6;
-}
-details.file-details .file-content-box.file-content-live { color: rgba(200,255,224,0.88); }
+details.file-details .file-content-box { border-top:1px solid rgba(0,255,136,0.1); padding:.6rem .8rem; max-height:280px; overflow-y:auto; white-space:pre-wrap; word-break:break-all; font-size:.75rem; color:rgba(200,255,224,0.7); line-height:1.6; }
+details.file-details .file-content-box.file-content-live { color:rgba(200,255,224,0.88); }
 details.file-details .file-actions { display:flex; gap:.5rem; align-items:center; }
 details.file-details a,
-details.file-details .copy-btn {
-    color:var(--green) !important; text-decoration:none !important;
-    font-size:.74rem; white-space:nowrap; padding:2px 9px;
-    border:1px solid rgba(0,255,136,0.28); border-radius:5px;
-    cursor:pointer; font-family:var(--mono); background:transparent;
-    transition: background .15s, color .15s, border-color .15s;
-}
+details.file-details .copy-btn { color:var(--green) !important; text-decoration:none !important; font-size:.74rem; white-space:nowrap; padding:2px 9px; border:1px solid rgba(0,255,136,0.28); border-radius:5px; cursor:pointer; font-family:var(--mono); background:transparent; transition:background .15s,color .15s,border-color .15s; }
 details.file-details a:hover,
 details.file-details .copy-btn:hover { background:rgba(0,255,136,0.1) !important; }
-details.file-details .copy-btn.copied {
-    background:rgba(0,255,136,0.18) !important;
-    border-color:var(--green) !important; color:var(--green) !important;
-}
+details.file-details .copy-btn.copied { background:rgba(0,255,136,0.18) !important; border-color:var(--green) !important; color:var(--green) !important; }
 
 /* Generating spinner */
 @keyframes spin { to{transform:rotate(360deg)} }
@@ -907,8 +857,10 @@ def render_chat():
                 st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
 
-    # ── Fixed bottom-left nav buttons (home / new / attach) ──
-    st.markdown('<div class="bottom-nav">', unsafe_allow_html=True)
+    # ── Nav buttons: the #nav-anchor marker lets CSS's adjacent-sibling selector
+    #    ( #nav-anchor + [data-testid="stHorizontalBlock"] ) pin exactly this
+    #    stHorizontalBlock to fixed bottom-left, co-located with stBottom.   ──
+    st.markdown('<div id="nav-anchor"></div>', unsafe_allow_html=True)
     c1, c2, c3 = st.columns([1, 1, 1])
     with c1:
         if st.button("\u2190", key="btn_home", help="Home"):
@@ -920,9 +872,9 @@ def render_chat():
         if st.button("\U0001f4ce", key="toggle_up", help="Attach File"):
             st.session_state.show_upload = not st.session_state.show_upload
             st.rerun()
-    st.markdown('</div>', unsafe_allow_html=True)
 
-    # ── Chat input — Streamlit places this in stBottom (always at viewport bottom) ──
+    # st.chat_input always renders in [data-testid="stBottom"] (fixed viewport bottom).
+    # stBottom gets padding-left:118px via CSS so it doesn't overlap the buttons above.
     user_input = st.chat_input("Message Spartan AI\u2026", key="chat_input")
 
     # ── Handle send ──
