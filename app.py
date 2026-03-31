@@ -4,6 +4,7 @@ import json
 import base64
 import html as html_lib
 import re
+import io
 from pathlib import Path
 
 # ── Config ────────────────────────────────────────────────────────────────────
@@ -12,9 +13,7 @@ OLLAMA_CHAT_URL = f"{NGROK_URL}/api/chat"
 OLLAMA_TAGS_URL = f"{NGROK_URL}/api/tags"
 USERNAME        = "dgeurts"
 PASSWORD        = "thaidakar21"
-OCR_CONFIG      = r"--oem 3 --psm 6"
 AUTH            = (USERNAME, PASSWORD)
-LLAVA_MODEL     = "llava"   # change to e.g. "llava:13b" if you have a bigger variant
 
 MODEL_MAP = {
     "Assignment Generation": "spartan-generator",
@@ -42,6 +41,7 @@ TEXT_EXTENSIONS = {
     ".bash",".r",".swift",".kt",".rs",".dart",".vue",".svelte",
 }
 IMAGE_EXTENSIONS = {".png",".jpg",".jpeg",".bmp",".tiff",".tif",".gif",".webp"}
+PDF_EXTENSIONS   = {".pdf"}
 
 # ── Page config ───────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -51,7 +51,7 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
-# ── Custom SVG favicon (diamond matching the logo) ────────────────────────────
+# ── Custom SVG favicon ────────────────────────────────────────────────────────
 _FAVICON_SVG = (
     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">'
     '<defs><linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%">'
@@ -68,7 +68,54 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# ── Pure helpers ──────────────────────────────────────────────────────────────
+# ── File extraction helpers ───────────────────────────────────────────────────
+
+def _ocr_image(raw_bytes: bytes) -> str:
+    """OCR an image using pytesseract."""
+    try:
+        import pytesseract
+        from PIL import Image
+        img = Image.open(io.BytesIO(raw_bytes))
+        text = pytesseract.image_to_string(img, config="--oem 3 --psm 6")
+        return text.strip() or "[OCR returned no text — image may have no readable content]"
+    except ImportError:
+        return "[OCR unavailable — install pytesseract and Pillow]"
+    except Exception as e:
+        return f"[OCR error: {e}]"
+
+
+def _extract_pdf(raw_bytes: bytes) -> str:
+    """Extract text from a PDF, trying pdfplumber then pypdf."""
+    try:
+        import pdfplumber
+        with pdfplumber.open(io.BytesIO(raw_bytes)) as pdf:
+            pages = [page.extract_text() or "" for page in pdf.pages]
+        text = "\n\n".join(pages).strip()
+        return text or "[PDF appears to contain no extractable text (may be scanned)]"
+    except ImportError:
+        pass
+    try:
+        import pypdf
+        reader = pypdf.PdfReader(io.BytesIO(raw_bytes))
+        pages  = [page.extract_text() or "" for page in reader.pages]
+        text   = "\n\n".join(pages).strip()
+        return text or "[PDF appears to contain no extractable text (may be scanned)]"
+    except ImportError:
+        pass
+    return "[PDF extraction failed — install pdfplumber or pypdf:  pip install pdfplumber]"
+
+
+def extract_file_text(raw_bytes: bytes, ext: str, filename: str) -> str:
+    """Dispatch to the right extractor based on file extension."""
+    if ext in IMAGE_EXTENSIONS:
+        return _ocr_image(raw_bytes)
+    if ext in PDF_EXTENSIONS:
+        return _extract_pdf(raw_bytes)
+    # All other files: treat as UTF-8 text
+    return raw_bytes.decode("utf-8", errors="replace")
+
+
+# ── Network helpers ───────────────────────────────────────────────────────────
 
 def check_model_online(model_name: str) -> bool:
     try:
@@ -79,55 +126,6 @@ def check_model_online(model_name: str) -> bool:
     except Exception:
         pass
     return False
-
-
-def describe_image_with_llava(image_bytes: bytes, filename: str = "image") -> str:
-    """
-    Send an image to the local LLaVA model via Ollama and return a rich
-    text description that can be forwarded to the main text model.
-    Falls back to a base64 stub if LLaVA is unavailable.
-    """
-    b64 = base64.b64encode(image_bytes).decode()
-    payload = {
-        "model": LLAVA_MODEL,
-        "messages": [
-            {
-                "role": "user",
-                "content": (
-                    f'The user has attached an image called "{filename}". '
-                    "Please describe it thoroughly: what objects, people, text, "
-                    "colours, layout, and any other relevant details are present. "
-                    "Be specific and complete — your description will be the only "
-                    "information the downstream model receives about this image."
-                ),
-                "images": [b64],
-            }
-        ],
-        "stream": False,
-    }
-    try:
-        r = requests.post(OLLAMA_CHAT_URL, auth=AUTH, json=payload, timeout=60)
-        r.raise_for_status()
-        data = r.json()
-        description = data.get("message", {}).get("content", "").strip()
-        if description:
-            return description
-        return "[LLaVA returned an empty description]"
-    except Exception as e:
-        return f"[LLaVA error — could not analyse image: {e}]"
-
-
-def build_user_content(text: str, file_info) -> str:
-    parts = []
-    if file_info:
-        ext  = file_info["ext"]
-        body = file_info["body"]
-        # Images go through LLaVA so the body is a text description;
-        # we label it clearly so the model knows it came from an image.
-        tag = "image" if ext in IMAGE_EXTENSIONS else ext.lstrip(".")
-        parts.append(f"[input-file-{tag}-text]\n{body}\n[/input-file-{tag}-text]")
-    parts.append(f"[input-user-text]\n{text}\n[/input-user-text]")
-    return "\n".join(parts)
 
 
 def stream_chat(model_name: str, messages: list):
@@ -148,6 +146,19 @@ def stream_chat(model_name: str, messages: list):
                 continue
 
 
+def build_user_content(text: str, file_info) -> str:
+    parts = []
+    if file_info:
+        ext = file_info["ext"]
+        body = file_info["body"]
+        tag  = "image" if ext in IMAGE_EXTENSIONS else ("pdf" if ext in PDF_EXTENSIONS else ext.lstrip("."))
+        parts.append(f"[input-file-{tag}-text]\n{body}\n[/input-file-{tag}-text]")
+    parts.append(f"[input-user-text]\n{text}\n[/input-user-text]")
+    return "\n".join(parts)
+
+
+# ── Tag parsing helpers ───────────────────────────────────────────────────────
+
 def _strip_tags(s: str) -> str:
     s = re.sub(r'\[/?output-text\]', '', s)
     s = re.sub(r'\[/?input-[^\]]+\]', '', s)
@@ -157,11 +168,17 @@ def _strip_tags(s: str) -> str:
     return s.strip()
 
 
+def _strip_partial_tag(s: str) -> str:
+    """Remove any trailing incomplete [...] sequence so a mid-stream [ isn't shown."""
+    return re.sub(r'\[[^\]]*$', '', s)
+
+
 def safe_html(text: str) -> str:
     return html_lib.escape(str(text).strip()).replace("\n", "<br>")
 
 
 def parse_output(raw: str) -> list:
+    """Final parse after streaming completes. Returns list of {type, content/...} dicts."""
     file_pat = re.compile(
         r'\[output-file-([a-zA-Z0-9]+)-([^\]]+)\](.*?)\[/output-file-\1-\2\]',
         re.DOTALL,
@@ -220,41 +237,65 @@ def _user_bubble_html(content: str, file_att) -> str:
     )
 
 
-def _file_segment_html(seg: dict) -> str:
-    """Completed file — expandable with content preview, copy, and download."""
+def _file_segment_html(seg: dict, keep_open: bool = False) -> str:
+    """Completed file — expandable with content preview, copy, and download.
+    keep_open=True renders with the open attribute so a previously-open
+    streaming widget stays open after generation finishes.
+    """
     ft    = seg["filetype"]
     fname = html_lib.escape(seg["filename"])
     raw   = seg["content"]
     enc   = base64.b64encode(raw.encode()).decode()
     content_escaped = html_lib.escape(raw)
-    # Unique stable ID per filename so multiple widgets don't clash
+
+    # Unique stable ID per filename
     uid    = base64.b64encode(seg["filename"].encode()).decode().replace("=","").replace("+","").replace("/","")[:16]
     box_id = f"fcb-{uid}"
     btn_id = f"cpb-{uid}"
+
+    # Embed raw content as a JSON-encoded JS string so we don't depend on
+    # DOM innerText (which can break with HTML entities) and so clipboard
+    # works even if navigator.clipboard is restricted in the iframe.
+    content_js = json.dumps(raw)   # properly escapes \n, quotes, etc.
     copy_js = (
         f"(function(){{"
-        f"var box=document.getElementById('{box_id}');"
+        f"var t={content_js};"
         f"var btn=document.getElementById('{btn_id}');"
-        f"if(!box||!btn)return;"
-        f"navigator.clipboard.writeText(box.innerText).then(function(){{"
-        f"btn.classList.add('copied');"
-        f"btn.textContent='✓ Copied';"
-        f"setTimeout(function(){{btn.classList.remove('copied');btn.textContent='⎘ Copy';}},2000);"
-        f"}});"
+        f"if(!btn)return;"
+        f"function flash(){{"
+        f"  btn.classList.add('copied');"
+        f"  btn.textContent='\u2713 Copied';"
+        f"  setTimeout(function(){{btn.classList.remove('copied');btn.textContent='\u2398 Copy';}},2000);"
+        f"}}"
+        f"if(navigator.clipboard&&navigator.clipboard.writeText){{"
+        f"  navigator.clipboard.writeText(t).then(flash).catch(function(){{"
+        f"    var ta=document.createElement('textarea');"
+        f"    ta.value=t;ta.style.position='fixed';ta.style.opacity='0';"
+        f"    document.body.appendChild(ta);ta.select();"
+        f"    document.execCommand('copy');document.body.removeChild(ta);flash();"
+        f"  }});"
+        f"}} else {{"
+        f"  var ta=document.createElement('textarea');"
+        f"  ta.value=t;ta.style.position='fixed';ta.style.opacity='0';"
+        f"  document.body.appendChild(ta);ta.select();"
+        f"  document.execCommand('copy');document.body.removeChild(ta);flash();"
+        f"}}"
         f"}})();"
     )
     copy_js_esc = html_lib.escape(copy_js)
+    open_attr = " open" if keep_open else ""
+
     return (
-        f'<details class="file-details">'
+        f'<details class="file-details"{open_attr}>'
         f'  <summary>'
-        f'    <span class="sum-left">📄 {fname}'
+        f'    <span class="sum-left">\U0001f4c4 {fname}'
         f'      <span style="opacity:.5;margin-left:.4rem">({ft.upper()})</span>'
         f'    </span>'
         f'    <span class="file-actions">'
-        f'      <button id="{btn_id}" class="copy-btn" onclick="{copy_js_esc}">⎘ Copy</button>'
-        f'      <a href="data:text/plain;base64,{enc}" download="{seg["filename"]}">⬇ Download</a>'
+        f'      <button id="{btn_id}" class="copy-btn" onclick="{copy_js_esc}">\u2398 Copy</button>'
+        f'      <a href="data:text/plain;base64,{enc}" download="{seg["filename"]}">\u2b07 Download</a>'
         f'    </span>'
-        f'    <span class="sum-toggle">▶</span>'
+        f'    <span class="sum-toggle">\u25b6</span>'
         f'  </summary>'
         f'  <div class="file-content-box" id="{box_id}">{content_escaped}</div>'
         f'</details>'
@@ -262,10 +303,7 @@ def _file_segment_html(seg: dict) -> str:
 
 
 def _file_generating_html(ft: str, fname: str, live_content: str = "") -> str:
-    """
-    In-progress file — auto-opened, shows live content as it streams in.
-    Updates in real time just like a text bubble.
-    """
+    """In-progress file — auto-opened, shows live content as it streams."""
     if live_content:
         content_escaped = html_lib.escape(live_content)
         body_html = (
@@ -277,19 +315,18 @@ def _file_generating_html(ft: str, fname: str, live_content: str = "") -> str:
     else:
         body_html = (
             '<div class="file-content-box" style="opacity:.45;font-style:italic">'
-            'Writing content…'
+            'Writing content\u2026'
             '</div>'
         )
-
     return (
         f'<details class="file-details gen-active" open>'
         f'  <summary>'
         f'    <span class="sum-left">'
         f'      <span class="gen-spin"></span>'
         f'      &nbsp;Generating {html_lib.escape(fname)}'
-        f'      <span style="opacity:.5;margin-left:.4rem">({ft.upper()})…</span>'
+        f'      <span style="opacity:.5;margin-left:.4rem">({ft.upper()})\u2026</span>'
         f'    </span>'
-        f'    <span class="sum-toggle">▶</span>'
+        f'    <span class="sum-toggle">\u25b6</span>'
         f'  </summary>'
         f'  {body_html}'
         f'</details>'
@@ -312,21 +349,22 @@ def _segments_to_html(segments: list) -> str:
             if t:
                 parts.append(f'<div style="margin-bottom:.3rem">{t}</div>')
         elif seg["type"] == "file":
-            parts.append(_file_segment_html(seg))
+            # keep_open=True so completed widgets stay open (user may have had them open)
+            parts.append(_file_segment_html(seg, keep_open=True))
     return "".join(parts)
 
 
 def build_streaming_html(raw: str) -> str:
     """
-    Walk through the accumulated raw stream and produce display HTML.
+    Walk the accumulated stream left-to-right and produce display HTML.
 
-    Rules:
-    - Text before/between tags → rendered as plain text (stays visible always)
-    - Completed [output-text] block → rendered text, no cursor
-    - In-progress [output-text] block (open tag, no close yet) → text + cursor
-    - Completed [output-file-...] block → expandable download widget
-    - In-progress [output-file-...] block → auto-opened, live content + cursor
-    - Bare text with no tags → text + cursor
+    Key rules:
+    - Never show a '[' or partial tag name to the user — strip them.
+    - Completed [output-text] block → plain text, no cursor.
+    - In-progress [output-text] (open, no close) → text + blinking cursor.
+    - Completed [output-file-...] block → download widget (open, keep_open=True).
+    - In-progress [output-file-...] block → live-content spinner widget.
+    - Bare text (no tags found) → text with partial-tag stripped + cursor.
     """
     parts = []
     pos   = 0
@@ -338,11 +376,16 @@ def build_streaming_html(raw: str) -> str:
         of_pos = (pos + of_m.start()) if of_m else -1
 
         candidates = []
-        if ot_pos >= pos:  candidates.append(('text', ot_pos))
-        if of_pos >= pos:  candidates.append(('file', of_pos))
+        if ot_pos != -1 and ot_pos >= pos:
+            candidates.append(('text', ot_pos))
+        if of_pos != -1 and of_pos >= pos:
+            candidates.append(('file', of_pos))
 
         if not candidates:
-            tail = raw[pos:].strip()
+            # No recognised opening tag found — show remaining text.
+            # Strip any incomplete [...] at the end so mid-stream '[' never shows.
+            tail = _strip_partial_tag(raw[pos:]).strip()
+            tail = _strip_tags(tail)
             if tail:
                 parts.append(
                     f'<div style="margin-bottom:.3rem">{safe_html(tail)}'
@@ -352,7 +395,9 @@ def build_streaming_html(raw: str) -> str:
 
         next_type, next_pos = min(candidates, key=lambda x: x[1])
 
-        before = raw[pos:next_pos].strip()
+        # Text before the next tag — strip partial tags just in case
+        before = _strip_partial_tag(raw[pos:next_pos]).strip()
+        before = _strip_tags(before)
         if before:
             parts.append(f'<div style="margin-bottom:.3rem">{safe_html(before)}</div>')
 
@@ -361,12 +406,16 @@ def build_streaming_html(raw: str) -> str:
             close_tag = '[/output-text]'
             close     = raw.find(close_tag, ot_pos + open_len)
             if close >= 0:
-                inner = _strip_tags(raw[ot_pos + open_len : close])
+                # Completed block — no cursor
+                inner = _strip_partial_tag(raw[ot_pos + open_len : close])
+                inner = _strip_tags(inner)
                 if inner:
                     parts.append(f'<div style="margin-bottom:.3rem">{safe_html(inner)}</div>')
                 pos = close + len(close_tag)
             else:
-                inner = _strip_tags(raw[ot_pos + open_len:])
+                # In-progress block — strip partial closing tag, show cursor
+                inner = _strip_partial_tag(raw[ot_pos + open_len:])
+                inner = _strip_tags(inner)
                 if inner:
                     parts.append(
                         f'<div style="margin-bottom:.3rem">{safe_html(inner)}'
@@ -375,21 +424,22 @@ def build_streaming_html(raw: str) -> str:
                 pos = n
 
         else:  # file block
-            ft        = of_m.group(1)
-            fn        = of_m.group(2)
-            open_tag  = of_m.group(0)
+            ft       = of_m.group(1)
+            fn       = of_m.group(2)
+            open_tag = of_m.group(0)
             close_tag = f'[/output-file-{ft}-{fn}]'
             open_end  = of_pos + len(open_tag)
             close     = raw.find(close_tag, open_end)
             if close >= 0:
+                # Completed — show download widget, keep_open so it stays open
                 content = raw[open_end:close].strip()
-                seg = {"type": "file", "filetype": ft, "filename": fn, "content": content}
-                parts.append(_file_segment_html(seg))
+                seg = {"type":"file","filetype":ft,"filename":fn,"content":content}
+                parts.append(_file_segment_html(seg, keep_open=True))
                 pos = close + len(close_tag)
             else:
-                # Pass the live in-progress content so the open panel shows it streaming
-                live_content = raw[open_end:].strip()
-                parts.append(_file_generating_html(ft, fn, live_content))
+                # In-progress — live content, strip partial closing tag at end
+                live = _strip_partial_tag(raw[open_end:]).strip()
+                parts.append(_file_generating_html(ft, fn, live))
                 pos = n
 
     return "".join(parts)
@@ -413,6 +463,7 @@ CSS = """
     --text-dim:    #4a7560;
     --mono:        'Share Tech Mono', monospace;
     --sans:        'Rajdhani', sans-serif;
+    --bar-h:       68px;
 }
 
 html, body, [data-testid="stAppViewContainer"] {
@@ -442,25 +493,109 @@ html, body, [data-testid="stAppViewContainer"] {
 .block-container { padding:0 !important; max-width:100% !important; }
 [data-testid="stMainBlockContainer"] { padding:0 !important; }
 
-/* Kill black bar behind chat input */
-[data-testid="stBottom"],
-[data-testid="stBottom"] > div {
-    background: transparent !important;
-    border-top: none !important;
-    padding: 0 !important;
-    box-shadow: none !important;
-}
-
 ::-webkit-scrollbar { width:4px; }
 ::-webkit-scrollbar-track { background:transparent; }
 ::-webkit-scrollbar-thumb { background:rgba(0,255,136,0.16); border-radius:2px; }
 
-/* ── HOME ── */
-.home-wrap { padding:3rem 2rem 2rem; max-width:860px; margin:0 auto; }
+/* ── stBottom: make it always-visible, styled as our input bar ── */
+[data-testid="stBottom"] {
+    position: fixed !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    z-index: 150 !important;
+    background: rgba(2,10,5,0.97) !important;
+    border-top: 1px solid var(--glass-bdr) !important;
+    backdrop-filter: blur(22px) !important;
+    -webkit-backdrop-filter: blur(22px) !important;
+    box-shadow: 0 -4px 24px rgba(0,0,0,0.5) !important;
+    padding: 0.45rem 1rem 0.55rem 110px !important; /* left gap for nav buttons */
+}
+[data-testid="stBottom"] > div {
+    background: transparent !important;
+    border: none !important;
+    padding: 0 !important;
+    box-shadow: none !important;
+}
 
+/* ── Nav button cluster (fixed bottom-left) ── */
+.bottom-nav {
+    position: fixed;
+    bottom: 12px;
+    left: 10px;
+    z-index: 200;
+    display: flex;
+    flex-direction: row;
+    gap: 6px;
+    align-items: center;
+}
+.bottom-nav [data-testid="stHorizontalBlock"] {
+    gap: 6px !important;
+    align-items: center !important;
+    flex-wrap: nowrap !important;
+}
+.bottom-nav [data-testid="stColumn"] > div { margin: 0 !important; }
+.bottom-nav .stButton > button {
+    width: 38px !important;
+    height: 38px !important;
+    padding: 0 !important;
+    border-radius: 50% !important;
+    font-size: 1rem !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    letter-spacing: 0 !important;
+}
+
+/* ── Chat input widget ── */
+[data-testid="stChatInputContainer"] { background:transparent !important; border:none !important; padding:0 !important; }
+[data-testid="stChatInput"] {
+    background:rgba(4,14,8,0.92) !important; border:1px solid var(--glass-bdr) !important;
+    border-radius:11px !important; color:var(--text) !important;
+    font-family:var(--mono) !important; transition:border-color .2s, box-shadow .2s;
+}
+[data-testid="stChatInput"]:focus-within {
+    border-color:rgba(0,255,136,0.4) !important;
+    box-shadow:0 0 18px rgba(0,255,136,0.1) !important;
+}
+[data-testid="stChatInput"] textarea { color:var(--text) !important; font-family:var(--mono) !important; font-size:.87rem !important; }
+[data-testid="stChatInput"] button { color:var(--green) !important; }
+
+/* ── Attach / pending area (fixed just above stBottom) ── */
+.attach-bar {
+    position: fixed;
+    bottom: var(--bar-h);
+    left: 0;
+    right: 0;
+    z-index: 148;
+    background: rgba(2,10,5,0.96);
+    border-top: 1px solid rgba(0,255,136,0.08);
+    padding: 0.4rem 1rem;
+}
+.upload-collapse { padding:.35rem .4rem; background:rgba(0,255,136,0.02); border:1px dashed rgba(0,255,136,0.14); border-radius:8px; }
+[data-testid="stFileUploaderDropzone"] { background:rgba(0,255,136,0.02) !important; border:1px dashed rgba(0,255,136,0.18) !important; border-radius:8px !important; }
+[data-testid="stFileUploaderDropzone"] * { color:var(--text-dim) !important; font-family:var(--mono) !important; font-size:.77rem !important; }
+[data-testid="stFileUploadDeleteBtn"] button { color:var(--red) !important; }
+.pending { display:inline-flex; align-items:center; gap:5px; font-family:var(--mono); font-size:0.7rem; color:var(--green); background:rgba(0,255,136,0.05); border:1px solid rgba(0,255,136,0.2); border-radius:999px; padding:2px 10px 2px 7px; }
+
+/* ── Global button styles ── */
+.stButton > button {
+    background: rgba(0,255,136,0.04) !important; color: var(--green) !important;
+    border: 1px solid rgba(0,255,136,0.22) !important; border-radius: 9px !important;
+    font-family: var(--mono) !important; font-size: 0.8rem !important;
+    letter-spacing: 0.04em !important; transition: all 0.18s !important;
+    white-space: nowrap !important; padding: 0.3rem 0.6rem !important;
+}
+.stButton > button:hover {
+    background: rgba(0,255,136,0.1) !important; border-color: var(--green) !important;
+    box-shadow: 0 0 16px rgba(0,255,136,0.15) !important;
+}
+.stButton > button:active { transform:scale(0.97) !important; }
+
+/* ── Home page ── */
+.home-wrap { padding:3rem 2rem 2rem; max-width:860px; margin:0 auto; }
 .home-logo {
-    font-family: var(--mono); font-size: 2.7rem;
-    color: var(--green);
+    font-family: var(--mono); font-size: 2.7rem; color: var(--green);
     text-shadow: 0 0 24px var(--green), 0 0 60px rgba(0,255,136,0.25);
     letter-spacing: 0.1em; text-align: center;
     display: flex; align-items: center; justify-content: center; gap: .55rem;
@@ -476,7 +611,6 @@ html, body, [data-testid="stAppViewContainer"] {
     0%,100% { box-shadow: 0 0 18px var(--green), 0 0 40px rgba(0,255,136,0.3); }
     50%      { box-shadow: 0 0 30px var(--green), 0 0 65px rgba(0,255,136,0.5); }
 }
-
 .home-byline {
     font-family: var(--mono); font-size: 0.68rem; color: var(--text-dim);
     letter-spacing: 0.28em; text-transform: uppercase;
@@ -492,8 +626,6 @@ hr.div { border:none; border-top:1px solid var(--glass-bdr); margin:2rem 0 1.6re
     font-family:var(--mono); font-size:0.66rem; color:var(--text-dim);
     letter-spacing:0.3em; text-transform:uppercase; text-align:center; margin-bottom:1.3rem;
 }
-
-/* ── Model cards ── */
 .model-card {
     background: var(--glass-bg); border: 1px solid var(--glass-bdr);
     backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
@@ -515,20 +647,7 @@ hr.div { border:none; border-top:1px solid var(--glass-bdr); margin:2rem 0 1.6re
 .dot.off { background:var(--red);   box-shadow:0 0 5px var(--red); }
 .lbl-on  { color:var(--green); }
 .lbl-off { color:var(--red); }
-
-/* ── Buttons ── */
-.stButton > button {
-    background: rgba(0,255,136,0.04) !important; color: var(--green) !important;
-    border: 1px solid rgba(0,255,136,0.22) !important; border-radius: 9px !important;
-    font-family: var(--mono) !important; font-size: 0.8rem !important;
-    letter-spacing: 0.04em !important; transition: all 0.18s !important;
-    white-space: nowrap !important; padding: 0.3rem 0.6rem !important;
-}
-.stButton > button:hover {
-    background: rgba(0,255,136,0.1) !important; border-color: var(--green) !important;
-    box-shadow: 0 0 16px rgba(0,255,136,0.15) !important;
-}
-.stButton > button:active { transform:scale(0.97) !important; }
+.hm-footer { text-align:center; margin-top:2.5rem; font-family:var(--mono); font-size:0.65rem; color:var(--text-dim); letter-spacing:.15em; }
 
 /* ── Chat header ── */
 .chat-hdr {
@@ -541,9 +660,10 @@ hr.div { border:none; border-top:1px solid var(--glass-bdr); margin:2rem 0 1.6re
 .hdr-title { font-family:var(--mono); font-size:0.92rem; color:var(--green); text-shadow:0 0 10px rgba(0,255,136,0.4); flex:1; }
 .hdr-status { display:flex; align-items:center; gap:5px; font-family:var(--mono); font-size:0.68rem; }
 
-.msgs { padding:1rem 0 0.5rem; }
+/* ── Messages area: add bottom padding so content clears the fixed bar ── */
+.msgs { padding:1rem 0 calc(var(--bar-h) + 20px); }
 
-/* ── Chat bubbles — percentage padding keeps them centered at any width ── */
+/* ── Chat bubbles ── */
 .row-user {
     display:flex; justify-content:flex-end;
     padding: 0.3rem 1.2rem 0.3rem 25%;
@@ -554,7 +674,6 @@ hr.div { border:none; border-top:1px solid var(--glass-bdr); margin:2rem 0 1.6re
     padding: 0.3rem 25% 0.3rem 1.2rem;
     margin: 0;
 }
-
 .bubble {
     padding:0.5rem 0.85rem; border-radius:15px; font-size:0.92rem;
     min-height:0; line-height:1.55; word-break:break-word;
@@ -570,7 +689,6 @@ hr.div { border:none; border-top:1px solid var(--glass-bdr); margin:2rem 0 1.6re
     color:var(--text); font-family:var(--mono); font-size:0.86rem;
     border-bottom-left-radius:4px; box-shadow:0 2px 10px rgba(0,0,0,0.3);
 }
-
 .attach-row { display:flex; justify-content:flex-end; margin-top:3px; }
 .attach-pill {
     font-family:var(--mono); font-size:0.69rem; color:var(--text-dim);
@@ -585,7 +703,7 @@ hr.div { border:none; border-top:1px solid var(--glass-bdr); margin:2rem 0 1.6re
 .thinking span:nth-child(2) { animation-delay:.2s; }
 .thinking span:nth-child(3) { animation-delay:.4s; }
 
-/* Cursor */
+/* Streaming cursor */
 @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
 .cur { display:inline-block; width:2px; height:.9em; background:var(--green); animation:blink .85s step-end infinite; vertical-align:text-bottom; margin-left:2px; border-radius:1px; }
 
@@ -611,50 +729,26 @@ details.file-details .file-content-box {
     max-height:280px; overflow-y:auto; white-space:pre-wrap; word-break:break-all;
     font-size:.75rem; color:rgba(200,255,224,0.7); line-height:1.6;
 }
-/* Live content box — slightly brighter while streaming */
-details.file-details .file-content-box.file-content-live {
-    color: rgba(200,255,224,0.88);
-}
+details.file-details .file-content-box.file-content-live { color: rgba(200,255,224,0.88); }
 details.file-details .file-actions { display:flex; gap:.5rem; align-items:center; }
 details.file-details a,
-details.file-details .copy-btn { color:var(--green) !important; text-decoration:none !important; font-size:.74rem; white-space:nowrap; padding:2px 9px; border:1px solid rgba(0,255,136,0.28); border-radius:5px; cursor:pointer; font-family:var(--mono); background:transparent; transition: background .15s, color .15s, border-color .15s; }
+details.file-details .copy-btn {
+    color:var(--green) !important; text-decoration:none !important;
+    font-size:.74rem; white-space:nowrap; padding:2px 9px;
+    border:1px solid rgba(0,255,136,0.28); border-radius:5px;
+    cursor:pointer; font-family:var(--mono); background:transparent;
+    transition: background .15s, color .15s, border-color .15s;
+}
 details.file-details a:hover,
 details.file-details .copy-btn:hover { background:rgba(0,255,136,0.1) !important; }
-details.file-details .copy-btn.copied { background:rgba(0,255,136,0.18) !important; border-color:var(--green) !important; color:var(--green) !important; }
+details.file-details .copy-btn.copied {
+    background:rgba(0,255,136,0.18) !important;
+    border-color:var(--green) !important; color:var(--green) !important;
+}
 
 /* Generating spinner */
 @keyframes spin { to{transform:rotate(360deg)} }
 .gen-spin { display:inline-block; width:10px; height:10px; flex-shrink:0; border:2px solid rgba(0,255,136,0.18); border-top-color:var(--green); border-radius:50%; animation:spin .75s linear infinite; }
-
-/* ── Input area ── */
-.input-area-wrap {
-    position:sticky; bottom:0; z-index:150;
-    background:rgba(2,10,5,0.96); border-top:1px solid var(--glass-bdr);
-    backdrop-filter:blur(22px); -webkit-backdrop-filter:blur(22px);
-    padding:0.5rem 1.1rem 0.65rem; box-shadow:0 -4px 24px rgba(0,0,0,0.45);
-}
-
-[data-testid="stHorizontalBlock"] { gap:0.35rem !important; align-items:center !important; }
-[data-testid="stColumn"] > div { margin:0 !important; }
-
-[data-testid="stChatInputContainer"] { background:transparent !important; border:none !important; padding:0 !important; }
-[data-testid="stChatInput"] {
-    background:rgba(4,14,8,0.92) !important; border:1px solid var(--glass-bdr) !important;
-    border-radius:11px !important; color:var(--text) !important;
-    font-family:var(--mono) !important; transition:border-color .2s, box-shadow .2s;
-}
-[data-testid="stChatInput"]:focus-within { border-color:rgba(0,255,136,0.4) !important; box-shadow:0 0 18px rgba(0,255,136,0.1) !important; }
-[data-testid="stChatInput"] textarea { color:var(--text) !important; font-family:var(--mono) !important; font-size:.87rem !important; }
-[data-testid="stChatInput"] button { color:var(--green) !important; }
-
-.upload-collapse { margin-top:.4rem; padding:.45rem .55rem; background:rgba(0,255,136,0.02); border:1px dashed rgba(0,255,136,0.14); border-radius:8px; }
-[data-testid="stFileUploaderDropzone"] { background:rgba(0,255,136,0.02) !important; border:1px dashed rgba(0,255,136,0.18) !important; border-radius:8px !important; }
-[data-testid="stFileUploaderDropzone"] * { color:var(--text-dim) !important; font-family:var(--mono) !important; font-size:.77rem !important; }
-[data-testid="stFileUploadDeleteBtn"] button { color:var(--red) !important; }
-
-.pending { display:inline-flex; align-items:center; gap:5px; font-family:var(--mono); font-size:0.7rem; color:var(--green); background:rgba(0,255,136,0.05); border:1px solid rgba(0,255,136,0.2); border-radius:999px; padding:2px 10px 2px 7px; }
-
-.hm-footer { text-align:center; margin-top:2.5rem; font-family:var(--mono); font-size:0.65rem; color:var(--text-dim); letter-spacing:.15em; }
 </style>
 """
 
@@ -671,7 +765,7 @@ def _init():
 _init()
 st.markdown(CSS, unsafe_allow_html=True)
 
-# ── Nav ───────────────────────────────────────────────────────────────────────
+# ── Nav helpers ───────────────────────────────────────────────────────────────
 def go_home():
     for k, v in {"page":"home","active_model":None,"messages":[],"pending_file":None,"show_upload":False}.items():
         st.session_state[k] = v
@@ -681,7 +775,7 @@ def go_chat(label):
         st.session_state[k] = v
 
 def new_chat():
-    st.session_state.messages    = []
+    st.session_state.messages     = []
     st.session_state.pending_file = None
     st.session_state.show_upload  = False
 
@@ -782,58 +876,54 @@ def render_chat():
         render_message(msg)
     st.markdown('</div>', unsafe_allow_html=True)
 
-    # ── Placeholders BEFORE the input bar so bubbles appear above it ──
+    # ── Streaming placeholders (render above the fixed bars) ──
     user_bubble_ph = st.empty()
     think_ph       = st.empty()
     stream_ph      = st.empty()
 
-    # ── Sticky input bar ──
-    st.markdown('<div class="input-area-wrap">', unsafe_allow_html=True)
+    # ── Attach bar (fixed just above chat input, only when needed) ──
+    if st.session_state.pending_file or st.session_state.show_upload:
+        st.markdown('<div class="attach-bar">', unsafe_allow_html=True)
+        if st.session_state.pending_file:
+            st.markdown(
+                f'<span class="pending">📎 {html_lib.escape(st.session_state.pending_file["name"])}</span>',
+                unsafe_allow_html=True,
+            )
+        if st.session_state.show_upload:
+            st.markdown('<div class="upload-collapse">', unsafe_allow_html=True)
+            upl = st.file_uploader(
+                "Attach file — used in your next message only",
+                key="file_uploader",
+                label_visibility="collapsed",
+            )
+            st.markdown('</div>', unsafe_allow_html=True)
+            if upl is not None:
+                ext  = Path(upl.name).suffix.lower()
+                raw  = upl.read()
+                with st.spinner(f"Reading {upl.name}…"):
+                    body = extract_file_text(raw, ext, upl.name)
+                st.session_state.pending_file = {"name": upl.name, "ext": ext, "body": body}
+                st.session_state.show_upload  = False
+                st.rerun()
+        st.markdown('</div>', unsafe_allow_html=True)
 
-    col_home, col_new, col_inp, col_att = st.columns([1, 1, 10, 1])
-    with col_home:
-        if st.button("⟵", key="btn_home", help="Home"):
+    # ── Fixed bottom-left nav buttons (home / new / attach) ──
+    st.markdown('<div class="bottom-nav">', unsafe_allow_html=True)
+    c1, c2, c3 = st.columns([1, 1, 1])
+    with c1:
+        if st.button("\u2190", key="btn_home", help="Home"):
             go_home(); st.rerun()
-    with col_new:
-        if st.button("↺", key="btn_new", help="New Chat"):
+    with c2:
+        if st.button("\u21ba", key="btn_new", help="New Chat"):
             new_chat(); st.rerun()
-    with col_inp:
-        user_input = st.chat_input("Message Spartan AI…", key="chat_input")
-    with col_att:
-        if st.button("📎", key="toggle_up", help="Attach File"):
+    with c3:
+        if st.button("\U0001f4ce", key="toggle_up", help="Attach File"):
             st.session_state.show_upload = not st.session_state.show_upload
             st.rerun()
-
-    if st.session_state.pending_file:
-        st.markdown(
-            f'<div style="margin-top:4px">'
-            f'<span class="pending">📎 {html_lib.escape(st.session_state.pending_file["name"])}</span>'
-            f'</div>',
-            unsafe_allow_html=True,
-        )
-
-    if st.session_state.show_upload:
-        st.markdown('<div class="upload-collapse">', unsafe_allow_html=True)
-        upl = st.file_uploader(
-            "Attach — used in your next message only",
-            key="file_uploader",
-            label_visibility="collapsed",
-        )
-        st.markdown('</div>', unsafe_allow_html=True)
-        if upl is not None:
-            ext  = Path(upl.name).suffix.lower()
-            raw  = upl.read()
-            if ext in IMAGE_EXTENSIONS:
-                with st.spinner(f"👁  LLaVA is analysing {upl.name}…"):
-                    body = describe_image_with_llava(raw, upl.name)
-                body = f"[Image analysed by LLaVA]\n{body}"
-            else:
-                body = raw.decode("utf-8", errors="replace")
-            st.session_state.pending_file = {"name": upl.name, "ext": ext, "body": body}
-            st.session_state.show_upload  = False
-            st.rerun()
-
     st.markdown('</div>', unsafe_allow_html=True)
+
+    # ── Chat input — Streamlit places this in stBottom (always at viewport bottom) ──
+    user_input = st.chat_input("Message Spartan AI\u2026", key="chat_input")
 
     # ── Handle send ──
     if user_input:
@@ -853,7 +943,6 @@ def render_chat():
             else:
                 ollama_msgs.append({"role":"assistant","content":m.get("content","")})
 
-        # Show user bubble and thinking indicator
         user_bubble_ph.markdown(_user_bubble_html(user_input, file_att), unsafe_allow_html=True)
         think_ph.markdown(_thinking_html(), unsafe_allow_html=True)
 
@@ -877,9 +966,6 @@ def render_chat():
 
         think_ph.empty()
 
-        # Parse segments and show the final, clean rendered version in the placeholder.
-        # We do NOT call st.rerun() here — this preserves anything the user has
-        # already started typing in the input box while generation was running.
         segs  = parse_output(raw_response)
         inner = _segments_to_html(segs)
         stream_ph.markdown(
@@ -887,8 +973,6 @@ def render_chat():
             unsafe_allow_html=True,
         )
         st.session_state.messages.append({"role":"assistant","content":raw_response,"segments":segs})
-        # No st.rerun() — the next user submission will trigger a natural rerun
-        # that re-renders the full history from session state correctly.
 
 
 # ── Router ────────────────────────────────────────────────────────────────────
