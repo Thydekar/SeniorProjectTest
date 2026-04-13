@@ -529,25 +529,42 @@ html, body, [data-testid="stAppViewContainer"] {
     padding: 0 !important; box-shadow: none !important;
 }
 
-/* Nav group JS-injected directly inside stBottom */
+/* Nav group — permanently inside stBottom (same layer, same element) */
 #injected-nav {
-    display: flex !important; flex-direction: row !important;
-    align-items: center !important; gap: 6px !important; flex-shrink: 0 !important;
+    display: flex !important; 
+    flex-direction: row !important;
+    align-items: center !important; 
+    gap: 6px !important; 
+    flex-shrink: 0 !important;
+    height: 100% !important;
+    padding: 4px 4px 4px 8px !important;
 }
 #injected-nav button {
-    width: 40px !important; height: 40px !important; border-radius: 50% !important;
-    background: rgba(0,255,136,0.04) !important; color: #00ff88 !important;
-    border: 1px solid rgba(0,255,136,0.22) !important;
-    font-size: 1.15rem !important; line-height: 1 !important; cursor: pointer !important;
-    display: flex !important; align-items: center !important; justify-content: center !important;
-    transition: background .18s, border-color .18s !important;
-    padding: 0 !important; flex-shrink: 0 !important; font-family: inherit !important;
+    width: 46px !important; 
+    height: 46px !important; 
+    border-radius: 50% !important;
+    background: rgba(0,255,136,0.06) !important; 
+    color: #00ff88 !important;
+    border: 2px solid rgba(0,255,136,0.35) !important;
+    font-size: 1.4rem !important; 
+    line-height: 1 !important; 
+    cursor: pointer !important;
+    display: flex !important; 
+    align-items: center !important; 
+    justify-content: center !important;
+    transition: background .18s, border-color .18s, transform .15s !important;
+    padding: 0 !important; 
+    flex-shrink: 0 !important; 
+    font-family: inherit !important;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3) !important;
 }
 #injected-nav button:hover {
-    background: rgba(0,255,136,0.12) !important; border-color: #00ff88 !important;
-    box-shadow: 0 0 14px rgba(0,255,136,0.2) !important;
+    background: rgba(0,255,136,0.18) !important; 
+    border-color: #00ff88 !important;
+    box-shadow: 0 0 14px rgba(0,255,136,0.3) !important;
+    transform: scale(1.08) !important;
 }
-#injected-nav button:active { transform: scale(0.94) !important; }
+#injected-nav button:active { transform: scale(0.92) !important; }
 
 /* ── Chat input widget ── */
 [data-testid="stChatInputContainer"] { background:transparent !important; border:none !important; padding:0 !important; }
@@ -719,6 +736,8 @@ details.file-details .copy-btn.copied { background:rgba(0,255,136,0.18) !importa
     function inject() {
         var bottom = document.querySelector('[data-testid="stBottom"]');
         if (!bottom) return;
+
+        // Remove any existing injected nav
         var existing = document.getElementById('injected-nav');
         if (existing && existing.parentNode === bottom) return;
         if (existing) existing.remove();
@@ -727,32 +746,53 @@ details.file-details .copy-btn.copied { background:rgba(0,255,136,0.18) !importa
         nav.id = 'injected-nav';
         BTNS.forEach(function(d) {
             var b = document.createElement('button');
-            b.textContent = d.icon;
+            b.innerHTML = d.icon;
             b.title = d.title;
             b.type = 'button';
             b.addEventListener('click', function(e) {
-                e.preventDefault(); e.stopPropagation();
+                e.preventDefault(); 
+                e.stopPropagation();
                 clickHidden(d.label);
             });
             nav.appendChild(b);
         });
 
+        // Insert as FIRST child of stBottom → same exact layer/element as typing bar
         bottom.insertBefore(nav, bottom.firstChild);
 
+        // Force input to take all remaining space
         Array.from(bottom.children).forEach(function(ch) {
             if (ch.id !== 'injected-nav') {
-                ch.style.flex = '1';
-                ch.style.minWidth = '0';
+                ch.style.setProperty('flex', '1', 'important');
+                ch.style.setProperty('min-width', '0', 'important');
             }
         });
     }
 
-    inject();
+    // Ultra-robust injection that survives every Streamlit re-render
+    inject();                    // immediate
+    setTimeout(inject, 100);
+    setTimeout(inject, 400);
+    setTimeout(inject, 900);
+    setTimeout(inject, 1600);
+
+    // Mutation observer + interval backup
     new MutationObserver(function(muts) {
         for (var i = 0; i < muts.length; i++) {
-            if (muts[i].addedNodes.length) { inject(); break; }
+            if (muts[i].addedNodes.length) { 
+                inject(); 
+                break; 
+            }
         }
     }).observe(document.body, { childList: true, subtree: true });
+
+    // Final safety net — poll every 350ms for 12 seconds
+    var attempts = 0;
+    var poll = setInterval(function() {
+        inject();
+        attempts++;
+        if (attempts > 35) clearInterval(poll);
+    }, 350);
 })();
 </script>
 """
