@@ -15,17 +15,13 @@ USERNAME        = "dgeurts"
 PASSWORD        = "thaidakar21"
 AUTH            = (USERNAME, PASSWORD)
 
-# ── Web search helper ──────────
+# ── Web search helper ──────
 
 def web_search(query: str, num_results: int = 5) -> str:
     # Perform a DuckDuckGo search and return formatted text results.
     try:
         encoded = requests.utils.quote(query)
-        hdrs = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                          "AppleWebKit/537.36 (KHTML, like Gecko) "
-                          "Chrome/120.0.0.0 Safari/537.36"
-        }
+        hdrs = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
         url = f"https://api.duckduckgo.com/?q={encoded}&format=json&no_html=1&skip_disambig=1"
         data = requests.get(url, headers=hdrs, timeout=8).json()
         results = []
@@ -33,13 +29,9 @@ def web_search(query: str, num_results: int = 5) -> str:
             results.append(f'Direct Answer: {data["Answer"]}')
         if data.get("AbstractText"):
             results.append(f'Summary: {data["AbstractText"]}')
-            if data.get("AbstractURL"):
-                results.append(f'Source: {data["AbstractURL"]}')
         for topic in data.get("RelatedTopics", [])[:num_results]:
             if isinstance(topic, dict) and topic.get("Text"):
                 results.append(f'- {topic["Text"]}')
-                if topic.get("FirstURL"):
-                    results.append(f'  URL: {topic["FirstURL"]}')
         if results:
             return "\n".join(results)
         r2 = requests.get(f"https://html.duckduckgo.com/html/?q={encoded}", headers=hdrs, timeout=8)
@@ -52,7 +44,7 @@ def web_search(query: str, num_results: int = 5) -> str:
                 title = re.sub(r"<[^>]+>", "", titles[i]).strip() if i < len(titles) else ""
                 out.append(f'{i+1}. {(title + ": ") if title else ""}{clean}')
             return "\n".join(out)
-        return "No results found for this query."
+        return "No results found."
     except Exception as e:
         return f"Search error: {e}"
 
@@ -543,18 +535,13 @@ html, body, [data-testid="stAppViewContainer"] {
 ::-webkit-scrollbar-track { background:transparent; }
 ::-webkit-scrollbar-thumb { background:rgba(0,255,136,0.16); border-radius:2px; }
 
-/* Hide Streamlit proxy nav buttons — real buttons are in #spartan-nav bar */
-.stButton:has(button[kind="secondary"]) {
-    position: fixed !important; left: -9999px !important; top: -9999px !important;
-    opacity: 0 !important; pointer-events: none !important;
-    width: 1px !important; height: 1px !important; overflow: hidden !important;
-}
+/* Only hide the three specific proxy buttons by key — not ALL secondary buttons */
+/* JS handles this — see script below */
 
-/* stBottom: the chat-input bar. Sits just above our nav bar. */
+/* stBottom: chat input bar, raised above our nav strip */
 [data-testid="stBottom"] {
     position: fixed !important;
-    bottom: 44px !important;   /* leave room for #spartan-nav below */
-    left: 0 !important; right: 0 !important;
+    bottom: 42px !important; left: 0 !important; right: 0 !important;
     z-index: 150 !important;
     background: rgba(2,10,5,0.97) !important;
     border-top: 1px solid var(--glass-bdr) !important;
@@ -566,41 +553,42 @@ html, body, [data-testid="stAppViewContainer"] {
     box-sizing: border-box !important;
 }
 
-/* Separate nav bar pinned right below the chat input */
+/* Spartan nav strip — sits below the input bar, above nothing */
 #spartan-nav {
     position: fixed !important;
     bottom: 0 !important; left: 0 !important; right: 0 !important;
-    height: 44px !important;
-    z-index: 151 !important;
-    background: rgba(2,10,5,0.98) !important;
-    border-top: 1px solid rgba(0,255,136,0.10) !important;
+    height: 42px !important;
+    z-index: 160 !important;
+    background: rgba(2,10,5,0.99) !important;
+    border-top: 1px solid rgba(0,255,136,0.12) !important;
     display: flex !important;
     flex-direction: row !important;
     align-items: center !important;
     justify-content: center !important;
-    gap: 12px !important;
-    padding: 0 16px !important;
+    gap: 10px !important;
+    padding: 0 !important;
     box-sizing: border-box !important;
 }
 #spartan-nav button {
-    height: 30px !important;
-    padding: 0 14px !important;
-    border-radius: 6px !important;
+    height: 28px !important;
+    padding: 0 16px !important;
+    border-radius: 5px !important;
     background: rgba(0,255,136,0.05) !important;
     color: #00ff88 !important;
-    border: 1px solid rgba(0,255,136,0.22) !important;
-    font-size: 0.75rem !important;
+    border: 1px solid rgba(0,255,136,0.25) !important;
+    font-size: 0.72rem !important;
     font-family: 'Share Tech Mono', monospace !important;
-    letter-spacing: 0.06em !important;
+    letter-spacing: 0.07em !important;
     cursor: pointer !important;
-    transition: background .15s, border-color .15s !important;
+    transition: background .15s, border-color .15s, box-shadow .15s !important;
     white-space: nowrap !important;
     line-height: 1 !important;
+    text-transform: uppercase !important;
 }
 #spartan-nav button:hover {
-    background: rgba(0,255,136,0.13) !important;
+    background: rgba(0,255,136,0.14) !important;
     border-color: #00ff88 !important;
-    box-shadow: 0 0 10px rgba(0,255,136,0.18) !important;
+    box-shadow: 0 0 12px rgba(0,255,136,0.2) !important;
 }
 #spartan-nav button:active { transform: scale(0.96) !important; }
 
@@ -634,7 +622,7 @@ html, body, [data-testid="stAppViewContainer"] {
 
 /* ── Attach / pending strip (slides in just above the bar) ── */
 .attach-bar {
-    position: fixed; bottom: 102px; left: 0; right: 0;
+    position: fixed; bottom: 100px; left: 0; right: 0;
     z-index: 148;
     background: rgba(2,10,5,0.96);
     border-top: 1px solid rgba(0,255,136,0.08);
@@ -669,8 +657,24 @@ html, body, [data-testid="stAppViewContainer"] {
 .home-desc { font-family:var(--sans); font-size:1rem; color:rgba(200,255,224,0.72); text-align:center; max-width:540px; margin:1.5rem auto 0; line-height:1.75; }
 hr.div { border:none; border-top:1px solid var(--glass-bdr); margin:2rem 0 1.6rem; }
 .sec-label { font-family:var(--mono); font-size:0.66rem; color:var(--text-dim); letter-spacing:0.3em; text-transform:uppercase; text-align:center; margin-bottom:1.3rem; }
-.model-card { background:var(--glass-bg); border:1px solid var(--glass-bdr); backdrop-filter:blur(18px); -webkit-backdrop-filter:blur(18px); border-radius:14px; padding:1.2rem 1.1rem 1rem; position:relative; overflow:hidden; box-shadow:0 4px 22px rgba(0,0,0,0.5),0 0 0 1px var(--glass-shine) inset; margin-bottom:0.35rem; }
+.model-card { background:var(--glass-bg); border:1px solid var(--glass-bdr); backdrop-filter:blur(18px); -webkit-backdrop-filter:blur(18px); border-radius:14px; padding:1.2rem 1.1rem 1rem; position:relative; overflow:hidden; box-shadow:0 4px 22px rgba(0,0,0,0.5),0 0 0 1px var(--glass-shine) inset; margin-bottom:0; cursor:pointer; transition:border-color .2s, box-shadow .2s; }
 .model-card::before { content:''; position:absolute; top:0; left:0; right:0; height:1px; background:linear-gradient(90deg,transparent,var(--green),transparent); opacity:0.35; }
+/* Card-style st.button — makes the whole card the click target */
+.card-btn > button {
+    background: transparent !important;
+    border: none !important;
+    padding: 0 !important;
+    width: 100% !important;
+    text-align: left !important;
+    cursor: pointer !important;
+    display: block !important;
+    margin-bottom: 1rem !important;
+}
+.card-btn > button:hover {
+    background: transparent !important;
+    box-shadow: none !important;
+}
+.card-btn > button p { display: none !important; }
 .card-icon  { font-size:1.6rem; line-height:1; margin-bottom:0.4rem; }
 .card-title { font-family:var(--sans); font-weight:700; font-size:1rem; color:var(--green); letter-spacing:0.04em; margin-bottom:0.25rem; }
 .card-desc  { font-family:var(--sans); font-size:0.84rem; color:var(--text-dim); line-height:1.5; }
@@ -756,31 +760,62 @@ details.file-details .copy-btn.copied { background:rgba(0,255,136,0.18) !importa
 </style>
 <script>
 (function() {
+    // Proxy button texts (rendered off-screen by Streamlit, clicked by JS)
+    var PROXIES = ['__home__', '__new__', '__up__'];
     var BTNS = [
-        { label: '← Home',     proxy: '__home__' },
-        { label: '↺ New Chat', proxy: '__new__'  },
-        { label: '📎 Attach', proxy: '__up__' },
+        { text: '← Home',       proxy: '__home__' },
+        { text: '↺ New Chat',   proxy: '__new__'  },
+        { text: '📎 Attach', proxy: '__up__'   },
     ];
 
     function clickProxy(proxy) {
-        document.querySelectorAll('button').forEach(function(b) {
-            if (b.textContent.trim() === proxy) {
-                b.style.pointerEvents = 'auto';
-                b.click();
+        var all = document.querySelectorAll('button');
+        for (var i = 0; i < all.length; i++) {
+            if (all[i].textContent.trim() === proxy) {
+                all[i].style.pointerEvents = 'auto';
+                all[i].click();
+                return;
             }
-        });
+        }
     }
 
+    // Hide proxy buttons without touching any other buttons
+    function hideProxies() {
+        var all = document.querySelectorAll('button');
+        for (var i = 0; i < all.length; i++) {
+            var txt = all[i].textContent.trim();
+            if (PROXIES.indexOf(txt) !== -1) {
+                // Walk up to the stButton wrapper div and hide that
+                var el = all[i];
+                while (el && el !== document.body) {
+                    if (el.classList && el.classList.contains('stButton')) {
+                        el.style.position = 'fixed';
+                        el.style.left = '-9999px';
+                        el.style.top = '-9999px';
+                        el.style.width = '1px';
+                        el.style.height = '1px';
+                        el.style.overflow = 'hidden';
+                        el.style.opacity = '0';
+                        break;
+                    }
+                    el = el.parentElement;
+                }
+            }
+        }
+    }
+
+    // Create the nav bar once and append to body
     function ensureNav() {
         if (document.getElementById('spartan-nav')) return;
         var nav = document.createElement('div');
         nav.id = 'spartan-nav';
         BTNS.forEach(function(d) {
             var b = document.createElement('button');
-            b.textContent = d.label;
+            b.textContent = d.text;
             b.type = 'button';
             b.addEventListener('click', function(e) {
-                e.preventDefault(); e.stopPropagation();
+                e.preventDefault();
+                e.stopPropagation();
                 clickProxy(d.proxy);
             });
             nav.appendChild(b);
@@ -788,10 +823,15 @@ details.file-details .copy-btn.copied { background:rgba(0,255,136,0.18) !importa
         document.body.appendChild(nav);
     }
 
-    ensureNav();
+    function tick() {
+        ensureNav();
+        hideProxies();
+    }
+
+    tick();
     new MutationObserver(function(muts) {
         for (var i = 0; i < muts.length; i++) {
-            if (muts[i].addedNodes.length) { ensureNav(); break; }
+            if (muts[i].addedNodes.length) { tick(); break; }
         }
     }).observe(document.body, { childList: true, subtree: true });
 })();
@@ -856,16 +896,25 @@ def render_home():
         lc = "lbl-on" if online else "lbl-off"
         lt = "ONLINE" if online else "OFFLINE"
         with cols[i % 2]:
-            st.markdown(f"""
-            <div class="model-card">
-                <div class="card-icon">{MODEL_ICONS[label]}</div>
-                <div class="card-title">{label}</div>
-                <div class="card-desc">{MODEL_DESC[label]}</div>
-                <div class="card-status">
-                    <span class="dot {dc}"></span>
-                    <span class="{lc}">{lt}</span>
-                </div>
-            </div>""", unsafe_allow_html=True)
+            # Wrap the card HTML in a container div, then put the st.button
+            # on top of it via CSS absolute positioning so clicking anywhere
+            # on the card triggers navigation.
+            card_html = (
+                f'<div class="model-card-wrap" style="position:relative;margin-bottom:1rem">'
+                f'<div class="model-card">'
+                f'<div class="card-icon">{MODEL_ICONS[label]}</div>'
+                f'<div class="card-title">{label}</div>'
+                f'<div class="card-desc">{MODEL_DESC[label]}</div>'
+                f'<div class="card-status">'
+                f'<span class="dot {dc}"></span>'
+                f'<span class="{lc}">{lt}</span>'
+                f'</div>'
+                f'<div style="margin-top:.8rem;font-family:var(--mono);font-size:.72rem;'
+                f'color:var(--green);opacity:.7;letter-spacing:.1em">TAP TO OPEN ▶</div>'
+                f'</div>'
+                f'</div>'
+            )
+            st.markdown(card_html, unsafe_allow_html=True)
             if st.button(f"Open {label}", key=f"open_{label}", use_container_width=True):
                 go_chat(label); st.rerun()
 
@@ -988,7 +1037,6 @@ def render_chat():
         for search_round in range(MAX_SEARCH_ROUNDS + 1):
             raw_response = ""
             started      = False
-
             try:
                 for token in stream_chat(model_id, ollama_msgs):
                     raw_response += token
@@ -1012,13 +1060,10 @@ def render_chat():
                 )
                 st.session_state.messages.append({"role":"assistant","content":raw_response,"segments":[{"type":"text","content":raw_response}]})
                 return
-
             think_ph.empty()
-
             search_queries = re.findall(r'\[output-search\](.*?)\[/output-search\]', raw_response, re.DOTALL)
             if not search_queries or search_round >= MAX_SEARCH_ROUNDS:
                 break
-
             search_block = ""
             for q in search_queries:
                 q = q.strip()
@@ -1029,7 +1074,6 @@ def render_chat():
                 )
                 results = web_search(q)
                 search_block += f"[input-search]\nQuery: {q}\n{results}\n[/input-search]\n"
-
             ollama_msgs.append({"role": "assistant", "content": raw_response})
             ollama_msgs.append({"role": "user",      "content": search_block})
             think_ph.markdown(_thinking_html(), unsafe_allow_html=True)
