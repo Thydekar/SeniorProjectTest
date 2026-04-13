@@ -15,6 +15,50 @@ USERNAME        = "dgeurts"
 PASSWORD        = "thaidakar21"
 AUTH            = (USERNAME, PASSWORD)
 
+# ── Web search helper ──────────
+
+def web_search(query: str, num_results: int = 5) -> str:
+    # Perform a DuckDuckGo search and return formatted text results.
+    try:
+        encoded = requests.utils.quote(query)
+        hdrs = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                          "AppleWebKit/537.36 (KHTML, like Gecko) "
+                          "Chrome/120.0.0.0 Safari/537.36"
+        }
+        url = f"https://api.duckduckgo.com/?q={encoded}&format=json&no_html=1&skip_disambig=1"
+        data = requests.get(url, headers=hdrs, timeout=8).json()
+        results = []
+        if data.get("Answer"):
+            results.append(f'Direct Answer: {data["Answer"]}')
+        if data.get("AbstractText"):
+            results.append(f'Summary: {data["AbstractText"]}')
+            if data.get("AbstractURL"):
+                results.append(f'Source: {data["AbstractURL"]}')
+        for topic in data.get("RelatedTopics", [])[:num_results]:
+            if isinstance(topic, dict) and topic.get("Text"):
+                results.append(f'- {topic["Text"]}')
+                if topic.get("FirstURL"):
+                    results.append(f'  URL: {topic["FirstURL"]}')
+        if results:
+            return "\n".join(results)
+        # Fallback: scrape HTML results
+        r2 = requests.get(f"https://html.duckduckgo.com/html/?q={encoded}", headers=hdrs, timeout=8)
+        snippets = re.findall(r'class="result__snippet"[^>]*>(.*?)</a>', r2.text, re.DOTALL)[:num_results]
+        titles   = re.findall(r'class="result__a"[^>]*>(.*?)</a>',        r2.text, re.DOTALL)[:num_results]
+        if snippets:
+            out = []
+            for i, snip in enumerate(snippets):
+                clean = re.sub(r"<[^>]+>", "", snip).strip()
+                title = re.sub(r"<[^>]+>", "", titles[i]).strip() if i < len(titles) else ""
+                out.append(f'{i+1}. {(title + ": ") if title else ""}{clean}')
+            return "\n".join(out)
+        return "No results found for this query."
+    except Exception as e:
+        return f"Search error: {e}"
+
+
+
 MODEL_MAP = {
     "Assignment Generation": "spartan-generator",
     "Assignment Grader":     "spartan-grader",
@@ -33,73 +77,6 @@ MODEL_DESC = {
     "AI Content Detector":   "Detect AI-generated content in student work with confidence scoring.",
     "Student Chatbot":       "A guided learning assistant that helps students understand concepts.",
 }
-
-# ── Web search helper ────────────────────────────────────────────────────────
-
-def web_search(query: str, num_results: int = 5) -> str:
-    """Perform a DuckDuckGo search and return formatted results."""
-    try:
-        encoded = requests.utils.quote(query)
-        headers = {
-            "User-Agent": (
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                "AppleWebKit/537.36 (KHTML, like Gecko) "
-                "Chrome/120.0.0.0 Safari/537.36"
-            )
-        }
-        # DuckDuckGo instant answer API
-        url = f"https://api.duckduckgo.com/?q={encoded}&format=json&no_html=1&skip_disambig=1"
-        r = requests.get(url, headers=headers, timeout=8)
-        data = r.json()
-
-        results = []
-
-        # Abstract (main summary)
-        if data.get("AbstractText"):
-            results.append(f"Summary: {data['AbstractText']}")
-            if data.get("AbstractURL"):
-                results.append(f"Source: {data['AbstractURL']}")
-
-        # Related topics
-        for topic in data.get("RelatedTopics", [])[:num_results]:
-            if isinstance(topic, dict) and topic.get("Text"):
-                results.append(f"- {topic['Text']}")
-                if topic.get("FirstURL"):
-                    results.append(f"  URL: {topic['FirstURL']}")
-
-        # Answer (e.g. calculations, direct answers)
-        if data.get("Answer"):
-            results.insert(0, f"Direct Answer: {data['Answer']}")
-
-        if results:
-            return "\n".join(results)
-
-        # Fallback: HTML scrape of DuckDuckGo
-        html_url = f"https://html.duckduckgo.com/html/?q={encoded}"
-        r2 = requests.get(html_url, headers=headers, timeout=8)
-        snippets = re.findall(
-            r'class="result__snippet"[^>]*>(.*?)</a>',
-            r2.text, re.DOTALL
-        )[:num_results]
-        titles = re.findall(
-            r'class="result__a"[^>]*>(.*?)</a>',
-            r2.text, re.DOTALL
-        )[:num_results]
-        if snippets:
-            out = []
-            for i, snip in enumerate(snippets):
-                clean = re.sub(r'<[^>]+>', '', snip).strip()
-                title = re.sub(r'<[^>]+>', '', titles[i]).strip() if i < len(titles) else ""
-                if title:
-                    out.append(f"{i+1}. {title}: {clean}")
-                else:
-                    out.append(f"{i+1}. {clean}")
-            return "\n".join(out)
-
-        return "No results found for this query."
-    except Exception as e:
-        return f"Search error: {e}"
-
 
 TEXT_EXTENSIONS = {
     ".txt",".js",".ts",".jsx",".tsx",".html",".htm",".css",
@@ -231,7 +208,7 @@ def _strip_tags(s: str) -> str:
     s = re.sub(r'\[/?input-[^\]]+\]', '', s)
     s = re.sub(r'\[output-file-[^\]]+\]', '', s)
     s = re.sub(r'\[/output-file-[^\]]+\]', '', s)
-    s = re.sub(r'\[output-search\][^\[]*\[/output-search\]', '', s)
+    s = re.sub(r'\[output-search\].*?\[/output-search\]', '', s, flags=re.DOTALL)
     s = re.sub(r'\[output-search\][^\[]*$', '', s)
     s = re.sub(r'\n{3,}', '\n\n', s)
     return s.strip()
@@ -567,7 +544,7 @@ html, body, [data-testid="stAppViewContainer"] {
 ::-webkit-scrollbar-track { background:transparent; }
 ::-webkit-scrollbar-thumb { background:rgba(0,255,136,0.16); border-radius:2px; }
 
-/* Proxy nav buttons (hidden, JS-triggered): hidden via JS itself */
+/* Proxy nav buttons hidden via JS (see script below) */
 
 /* stBottom: position:fixed bottom:0 — the actual bar */
 [data-testid="stBottom"] {
@@ -765,24 +742,23 @@ details.file-details .copy-btn.copied { background:rgba(0,255,136,0.18) !importa
 </style>
 <script>
 (function() {
-    var PROXY_LABELS = ['__home__', '__new__', '__up__'];
+    var PROXY = ["__home__","__new__","__up__"];
     var BTNS = [
-        { icon: '\u2190', title: 'Home',     label: '__home__' },
-        { icon: '\u21ba', title: 'New Chat',  label: '__new__'  },
-        { icon: '\ud83d\udcce', title: 'Attach', label: '__up__' },
+        { icon: '←', title: 'Home',     label: '__home__' },
+        { icon: '↺', title: 'New Chat', label: '__new__'  },
+        { icon: '📎', title: 'Attach', label: '__up__' },
     ];
 
-    // Hide proxy Streamlit buttons (they're only needed as click targets)
     function hideProxyBtns() {
-        document.querySelectorAll('button').forEach(function(b) {
-            if (PROXY_LABELS.indexOf(b.textContent.trim()) !== -1) {
-                var wrap = b.closest('[data-testid="column"]') || b.closest('.stButton') || b.parentElement;
-                if (wrap) {
-                    wrap.style.cssText = 'position:fixed!important;left:-9999px!important;top:-9999px!important;width:1px!important;height:1px!important;overflow:hidden!important;opacity:0!important;pointer-events:none!important';
-                }
+        document.querySelectorAll("button").forEach(function(b) {
+            if (PROXY.indexOf(b.textContent.trim()) !== -1) {
+                var p = b.parentElement;
+                while (p && !p.classList.contains("stButton")) p = p.parentElement;
+                if (p) p.style.cssText = "position:fixed!important;left:-9999px!important;top:-9999px!important;width:1px!important;height:1px!important;overflow:hidden!important;opacity:0!important;pointer-events:none!important";
             }
         });
     }
+
 
     function clickHidden(label) {
         document.querySelectorAll('button').forEach(function(b) {
@@ -1019,12 +995,11 @@ def render_chat():
         user_bubble_ph.markdown(_user_bubble_html(user_input, file_att), unsafe_allow_html=True)
         think_ph.markdown(_thinking_html(), unsafe_allow_html=True)
 
-        # ── Search loop: keep streaming until no [output-search] remains ──
+        # Search loop: keep going until AI response has no [output-search] tags
         MAX_SEARCH_ROUNDS = 5
-        search_round      = 0
         raw_response      = ""
 
-        while search_round <= MAX_SEARCH_ROUNDS:
+        for search_round in range(MAX_SEARCH_ROUNDS + 1):
             raw_response = ""
             started      = False
 
@@ -1034,13 +1009,10 @@ def render_chat():
                     if not started:
                         think_ph.empty()
                         started = True
-                    # While streaming, mask [output-search] blocks from display
-                    display_raw = re.sub(
-                        r'\[output-search\].*?\[/output-search\]', '',
-                        raw_response, flags=re.DOTALL
-                    )
-                    display_raw = re.sub(r'\[output-search\][^\[]*$', '', display_raw)
-                    inner = build_streaming_html(display_raw)
+                    # Strip [output-search] blocks from live display
+                    disp = re.sub(r'\[output-search\].*?\[/output-search\]', '', raw_response, flags=re.DOTALL)
+                    disp = re.sub(r'\[output-search\][^\[]*$', '', disp)
+                    inner = build_streaming_html(disp)
                     stream_ph.markdown(
                         f'<div class="row-ai"><div class="bubble bub-ai">{inner}</div></div>',
                         unsafe_allow_html=True,
@@ -1058,30 +1030,26 @@ def render_chat():
 
             think_ph.empty()
 
-            # Check for [output-search] tag in the completed response
-            search_pat = re.compile(r'\[output-search\](.*?)\[/output-search\]', re.DOTALL)
-            search_matches = search_pat.findall(raw_response)
+            # Check if AI wants to search
+            search_queries = re.findall(r'\[output-search\](.*?)\[/output-search\]', raw_response, re.DOTALL)
+            if not search_queries or search_round >= MAX_SEARCH_ROUNDS:
+                break
 
-            if not search_matches or search_round >= MAX_SEARCH_ROUNDS:
-                break  # Done — no more searches needed
-
-            # Perform all searches and inject results
-            search_results_block = ""
-            for query in search_matches:
-                query = query.strip()
+            # Run each search and inject results
+            search_block = ""
+            for q in search_queries:
+                q = q.strip()
                 stream_ph.markdown(
-                    f'<div class="row-ai"><div class="bubble bub-ai" style="opacity:.6;font-size:.8rem">'
-                    f'🔍 Searching: <em>{html_lib.escape(query)}</em>…</div></div>',
+                    f'<div class="row-ai"><div class="bubble bub-ai" style="opacity:.65;font-size:.8rem">'
+                    f'🔍 Searching: <em>{html_lib.escape(q)}</em>…</div></div>',
                     unsafe_allow_html=True,
                 )
-                results = web_search(query)
-                search_results_block += f"[input-search]\nQuery: {query}\n{results}\n[/input-search]\n"
+                results = web_search(q)
+                search_block += f"[input-search]\nQuery: {q}\n{results}\n[/input-search]\n"
 
-            # Append assistant turn + search results to conversation, then continue
             ollama_msgs.append({"role": "assistant", "content": raw_response})
-            ollama_msgs.append({"role": "user",      "content": search_results_block})
+            ollama_msgs.append({"role": "user",      "content": search_block})
             think_ph.markdown(_thinking_html(), unsafe_allow_html=True)
-            search_round += 1
 
         segs  = parse_output(raw_response)
         inner = _segments_to_html(segs)
