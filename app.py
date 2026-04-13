@@ -174,11 +174,10 @@ def _strip_partial_tag(s: str) -> str:
 
 
 def safe_html(text: str) -> str:
-    # Collapse all whitespace to single spaces so bubbles render as plain text
-    import re as _re
+    # Collapse ALL whitespace variants to single spaces — user bubbles are plain text
     cleaned = str(text).strip()
-    cleaned = _re.sub(r'[\r\n\t]+', ' ', cleaned)
-    cleaned = _re.sub(r' {2,}', ' ', cleaned)
+    cleaned = re.sub(r'[\r\n\t]+', ' ', cleaned)
+    cleaned = re.sub(r' {2,}', ' ', cleaned)
     return html_lib.escape(cleaned)
 
 
@@ -501,46 +500,45 @@ html, body, [data-testid="stAppViewContainer"] {
 ::-webkit-scrollbar-track { background:transparent; }
 ::-webkit-scrollbar-thumb { background:rgba(0,255,136,0.16); border-radius:2px; }
 
-/* ── stBottom: pinned to viewport bottom, leave left gap for nav buttons ── */
+/* ── stBottom: full-width fixed bar at bottom, flex-row ── */
 [data-testid="stBottom"] {
     position: fixed !important;
-    bottom: 0 !important;
-    left: 140px !important;   /* leave room for the 3 nav buttons on the left */
-    right: 0 !important;
+    bottom: 0 !important; left: 0 !important; right: 0 !important;
     z-index: 150 !important;
     background: rgba(2,10,5,0.97) !important;
     border-top: 1px solid var(--glass-bdr) !important;
     backdrop-filter: blur(22px) !important;
     -webkit-backdrop-filter: blur(22px) !important;
     box-shadow: 0 -4px 24px rgba(0,0,0,0.5) !important;
-    padding: 8px 16px 8px 8px !important;
+    padding: 8px 12px !important;
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    gap: 8px !important;
+    min-height: var(--bar-h) !important;
 }
-[data-testid="stBottom"] > div {
+/* The direct child div wrapping the chat input — fill remaining space */
+[data-testid="stBottom"] > div[data-testid="stChatInputContainer"],
+[data-testid="stBottom"] > div:last-child {
     background: transparent !important;
     border: none !important;
     padding: 0 !important;
     box-shadow: none !important;
+    flex: 1 !important;
+    min-width: 0 !important;
 }
 
-/* ── Nav button row: fixed bottom-left, same height as stBottom ── */
+/* ── Nav button row — when JS moves it into stBottom it becomes a flex item ── */
 #nav-anchor + [data-testid="stHorizontalBlock"] {
-    position: fixed !important;
-    bottom: 0 !important;
-    left: 0 !important;
-    width: 136px !important;
-    height: var(--bar-h) !important;
-    z-index: 151 !important;
-    background: rgba(2,10,5,0.97) !important;
-    border-top: 1px solid var(--glass-bdr) !important;
-    backdrop-filter: blur(22px) !important;
-    -webkit-backdrop-filter: blur(22px) !important;
+    flex-shrink: 0 !important;
     display: flex !important;
     flex-direction: row !important;
     align-items: center !important;
-    justify-content: center !important;
     gap: 4px !important;
+    width: auto !important;
     margin: 0 !important;
-    padding: 0 8px !important;
+    padding: 0 !important;
+    background: transparent !important;
 }
 #nav-anchor + [data-testid="stHorizontalBlock"] [data-testid="stColumn"] {
     flex: 0 0 40px !important;
@@ -667,9 +665,7 @@ hr.div { border:none; border-top:1px solid var(--glass-bdr); margin:2rem 0 1.6re
 .bubble {
     padding: 0.5rem 0.85rem; border-radius: 15px; font-size: 0.92rem;
     min-height: 0; line-height: 1.55; word-break: break-word;
-    display: inline-block;
-    white-space: normal;
-    /* bubbles never wider than 68% of the viewport — prevents edge-to-edge */
+    display: block;
     max-width: 68%;
 }
 .bub-user {
@@ -718,7 +714,84 @@ details.file-details .copy-btn.copied { background:rgba(0,255,136,0.18) !importa
 @keyframes spin { to{transform:rotate(360deg)} }
 .gen-spin { display:inline-block; width:10px; height:10px; flex-shrink:0; border:2px solid rgba(0,255,136,0.18); border-top-color:var(--green); border-radius:50%; animation:spin .75s linear infinite; }
 </style>
+<script>
+(function() {
+    var MOVED_ATTR = 'data-nav-moved';
 
+    function moveButtons() {
+        var bottom = document.querySelector('[data-testid="stBottom"]');
+        if (!bottom) return false;
+
+        var anchor = document.getElementById('nav-anchor');
+        if (!anchor) return false;
+
+        var block = anchor.nextElementSibling;
+        if (!block || block.dataset.testid !== 'stHorizontalBlock') return false;
+
+        // Already moved and still inside stBottom — nothing to do
+        if (block.getAttribute(MOVED_ATTR) === '1' && block.parentNode === bottom) return true;
+
+        // Move the button block to be the FIRST child of stBottom
+        bottom.insertBefore(block, bottom.firstChild);
+        block.setAttribute(MOVED_ATTR, '1');
+
+        // Style button block as tight flex row
+        block.style.cssText = [
+            'display:flex', 'flex-direction:row', 'align-items:center',
+            'gap:4px', 'flex-shrink:0', 'width:auto',
+            'margin:0', 'padding:0', 'background:transparent',
+            'position:static', 'bottom:auto', 'left:auto'
+        ].join(';');
+
+        // Each column = 40px
+        block.querySelectorAll('[data-testid="stColumn"]').forEach(function(col) {
+            col.style.cssText = 'flex:0 0 40px;width:40px;min-width:40px;max-width:40px;padding:0;';
+            if (col.firstElementChild)
+                col.firstElementChild.style.cssText = 'margin:0;padding:0;';
+        });
+
+        // stBottom = flex row, full stretch
+        bottom.style.cssText = [
+            'position:fixed', 'bottom:0', 'left:0', 'right:0',
+            'z-index:150', 'display:flex', 'flex-direction:row',
+            'align-items:center', 'gap:8px', 'padding:8px 12px',
+            'background:rgba(2,10,5,0.97)',
+            'border-top:1px solid rgba(0,255,136,0.14)',
+            'backdrop-filter:blur(22px)',
+            'box-shadow:0 -4px 24px rgba(0,0,0,0.5)',
+            'min-height:62px'
+        ].join(';');
+
+        // Chat input fills the rest
+        var inp = bottom.querySelector('[data-testid="stChatInputContainer"]');
+        if (!inp) inp = bottom.children[bottom.children.length - 1];
+        if (inp) inp.style.cssText = 'flex:1;min-width:0;background:transparent;border:none;padding:0;box-shadow:none;';
+
+        return true;
+    }
+
+    // Keep trying until it works, then watch for Streamlit re-renders
+    var attempts = 0;
+    function tryMove() {
+        if (moveButtons()) {
+            // Success — keep the MutationObserver watching for re-renders
+            return;
+        }
+        if (++attempts < 50) setTimeout(tryMove, 100);
+    }
+
+    document.addEventListener('DOMContentLoaded', tryMove);
+    setTimeout(tryMove, 0);
+
+    // Re-apply after every Streamlit DOM mutation (re-renders reset styles)
+    var obs = new MutationObserver(function(mutations) {
+        for (var i = 0; i < mutations.length; i++) {
+            if (mutations[i].addedNodes.length > 0) { moveButtons(); break; }
+        }
+    });
+    obs.observe(document.body, { childList: true, subtree: true });
+})();
+</script>
 """
 
 # ── Session init ──────────────────────────────────────────────────────────────
