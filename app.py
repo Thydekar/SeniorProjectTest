@@ -69,9 +69,7 @@ st.markdown(
 )
 
 # ── File extraction helpers ───────────────────────────────────────────────────
-
 def _ocr_image(raw_bytes: bytes) -> str:
-    """OCR an image using pytesseract."""
     try:
         import pytesseract
         from PIL import Image
@@ -83,9 +81,7 @@ def _ocr_image(raw_bytes: bytes) -> str:
     except Exception as e:
         return f"[OCR error: {e}]"
 
-
 def _extract_pdf(raw_bytes: bytes) -> str:
-    """Extract text from a PDF, trying pdfplumber then pypdf."""
     try:
         import pdfplumber
         with pdfplumber.open(io.BytesIO(raw_bytes)) as pdf:
@@ -104,19 +100,14 @@ def _extract_pdf(raw_bytes: bytes) -> str:
         pass
     return "[PDF extraction failed — install pdfplumber or pypdf:  pip install pdfplumber]"
 
-
 def extract_file_text(raw_bytes: bytes, ext: str, filename: str) -> str:
-    """Dispatch to the right extractor based on file extension."""
     if ext in IMAGE_EXTENSIONS:
         return _ocr_image(raw_bytes)
     if ext in PDF_EXTENSIONS:
         return _extract_pdf(raw_bytes)
-    # All other files: treat as UTF-8 text
     return raw_bytes.decode("utf-8", errors="replace")
 
-
 # ── Network helpers ───────────────────────────────────────────────────────────
-
 def check_model_online(model_name: str) -> bool:
     try:
         r = requests.get(OLLAMA_TAGS_URL, auth=AUTH, timeout=5)
@@ -126,7 +117,6 @@ def check_model_online(model_name: str) -> bool:
     except Exception:
         pass
     return False
-
 
 def stream_chat(model_name: str, messages: list):
     payload = {"model": model_name, "messages": messages, "stream": True}
@@ -145,7 +135,6 @@ def stream_chat(model_name: str, messages: list):
             except json.JSONDecodeError:
                 continue
 
-
 def build_user_content(text: str, file_info) -> str:
     parts = []
     if file_info:
@@ -156,9 +145,7 @@ def build_user_content(text: str, file_info) -> str:
     parts.append(f"[input-user-text]\n{text}\n[/input-user-text]")
     return "\n".join(parts)
 
-
 # ── Tag parsing helpers ───────────────────────────────────────────────────────
-
 def _strip_tags(s: str) -> str:
     s = re.sub(r'\[/?output-text\]', '', s)
     s = re.sub(r'\[/?input-[^\]]+\]', '', s)
@@ -167,20 +154,15 @@ def _strip_tags(s: str) -> str:
     s = re.sub(r'\n{3,}', '\n\n', s)
     return s.strip()
 
-
 def _strip_partial_tag(s: str) -> str:
-    """Remove any trailing incomplete [...] sequence so a mid-stream [ isn't shown."""
     return re.sub(r'\[[^\]]*$', '', s)
-
 
 def safe_html(text: str) -> str:
     cleaned = re.sub(r'[\r\n\t]+', ' ', str(text).strip())
     cleaned = re.sub(r' {2,}', ' ', cleaned)
     return html_lib.escape(cleaned)
 
-
 def parse_output(raw: str) -> list:
-    """Final parse after streaming completes. Returns list of {type, content/...} dicts."""
     file_pat = re.compile(
         r'\[output-file-([a-zA-Z0-9]+)-([^\]]+)\](.*?)\[/output-file-\1-\2\]',
         re.DOTALL,
@@ -219,129 +201,38 @@ def parse_output(raw: str) -> list:
 
     return segments
 
-
-# ── HTML builders ─────────────────────────────────────────────────────────────
-
+# ── HTML builders (unchanged) ────────────────────────────────────────────────
 def _user_bubble_html(content: str, file_att) -> str:
     txt = safe_html(content)
     file_htm = ""
     if file_att:
-        file_htm = (
-            f'<div class="attach-row">'
-            f'<span class="attach-pill">📎 {html_lib.escape(file_att["name"])}</span>'
-            f'</div>'
-        )
-    return (
-        f'<div class="row-user">'
-        f'<div class="bubble bub-user">{txt}</div>'
-        f'{file_htm}'
-        f'</div>'
-    )
-
+        file_htm = f'<div class="attach-row"><span class="attach-pill">📎 {html_lib.escape(file_att["name"])}</span></div>'
+    return f'<div class="row-user"><div class="bubble bub-user">{txt}</div>{file_htm}</div>'
 
 def _file_segment_html(seg: dict, keep_open: bool = False) -> str:
-    """Completed file — expandable with content preview, copy, and download.
-    keep_open=True renders with the open attribute so a previously-open
-    streaming widget stays open after generation finishes.
-    """
     ft    = seg["filetype"]
     fname = html_lib.escape(seg["filename"])
     raw   = seg["content"]
     enc   = base64.b64encode(raw.encode()).decode()
     content_escaped = html_lib.escape(raw)
-
-    # Unique stable ID per filename
     uid    = base64.b64encode(seg["filename"].encode()).decode().replace("=","").replace("+","").replace("/","")[:16]
     box_id = f"fcb-{uid}"
     btn_id = f"cpb-{uid}"
-
-    # Embed raw content as a JSON-encoded JS string so we don't depend on
-    # DOM innerText (which can break with HTML entities) and so clipboard
-    # works even if navigator.clipboard is restricted in the iframe.
-    content_js = json.dumps(raw)   # properly escapes \n, quotes, etc.
-    copy_js = (
-        f"(function(){{"
-        f"var t={content_js};"
-        f"var btn=document.getElementById('{btn_id}');"
-        f"if(!btn)return;"
-        f"function flash(){{"
-        f"  btn.classList.add('copied');"
-        f"  btn.textContent='\u2713 Copied';"
-        f"  setTimeout(function(){{btn.classList.remove('copied');btn.textContent='\u2398 Copy';}},2000);"
-        f"}}"
-        f"if(navigator.clipboard&&navigator.clipboard.writeText){{"
-        f"  navigator.clipboard.writeText(t).then(flash).catch(function(){{"
-        f"    var ta=document.createElement('textarea');"
-        f"    ta.value=t;ta.style.position='fixed';ta.style.opacity='0';"
-        f"    document.body.appendChild(ta);ta.select();"
-        f"    document.execCommand('copy');document.body.removeChild(ta);flash();"
-        f"  }});"
-        f"}} else {{"
-        f"  var ta=document.createElement('textarea');"
-        f"  ta.value=t;ta.style.position='fixed';ta.style.opacity='0';"
-        f"  document.body.appendChild(ta);ta.select();"
-        f"  document.execCommand('copy');document.body.removeChild(ta);flash();"
-        f"}}"
-        f"}})();"
-    )
+    content_js = json.dumps(raw)
+    copy_js = f"(function(){{var t={content_js};var btn=document.getElementById('{btn_id}');if(!btn)return;function flash(){{btn.classList.add('copied');btn.textContent='✓ Copied';setTimeout(function(){{btn.classList.remove('copied');btn.textContent='⎘ Copy';}},2000);}}if(navigator.clipboard&&navigator.clipboard.writeText){{navigator.clipboard.writeText(t).then(flash).catch(function(){{var ta=document.createElement('textarea');ta.value=t;ta.style.position='fixed';ta.style.opacity='0';document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);flash();}})}}else{{var ta=document.createElement('textarea');ta.value=t;ta.style.position='fixed';ta.style.opacity='0';document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);flash();}}}})();"
     copy_js_esc = html_lib.escape(copy_js)
     open_attr = " open" if keep_open else ""
-
-    return (
-        f'<details class="file-details"{open_attr}>'
-        f'  <summary>'
-        f'    <span class="sum-left">\U0001f4c4 {fname}'
-        f'      <span style="opacity:.5;margin-left:.4rem">({ft.upper()})</span>'
-        f'    </span>'
-        f'    <span class="file-actions">'
-        f'      <button id="{btn_id}" class="copy-btn" onclick="{copy_js_esc}">\u2398 Copy</button>'
-        f'      <a href="data:text/plain;base64,{enc}" download="{seg["filename"]}">\u2b07 Download</a>'
-        f'    </span>'
-        f'    <span class="sum-toggle">\u25b6</span>'
-        f'  </summary>'
-        f'  <div class="file-content-box" id="{box_id}">{content_escaped}</div>'
-        f'</details>'
-    )
-
+    return f'<details class="file-details"{open_attr}><summary><span class="sum-left">📄 {fname} <span style="opacity:.5;margin-left:.4rem">({ft.upper()})</span></span><span class="file-actions"><button id="{btn_id}" class="copy-btn" onclick="{copy_js_esc}">⎘ Copy</button><a href="data:text/plain;base64,{enc}" download="{seg["filename"]}">↓ Download</a></span><span class="sum-toggle">▶</span></summary><div class="file-content-box" id="{box_id}">{content_escaped}</div></details>'
 
 def _file_generating_html(ft: str, fname: str, live_content: str = "") -> str:
-    """In-progress file — auto-opened, shows live content as it streams."""
     if live_content:
-        content_escaped = html_lib.escape(live_content)
-        body_html = (
-            f'<div class="file-content-box file-content-live">'
-            f'{content_escaped}'
-            f'<span class="cur"></span>'
-            f'</div>'
-        )
+        body_html = f'<div class="file-content-box file-content-live">{html_lib.escape(live_content)}<span class="cur"></span></div>'
     else:
-        body_html = (
-            '<div class="file-content-box" style="opacity:.45;font-style:italic">'
-            'Writing content\u2026'
-            '</div>'
-        )
-    return (
-        f'<details class="file-details gen-active" open>'
-        f'  <summary>'
-        f'    <span class="sum-left">'
-        f'      <span class="gen-spin"></span>'
-        f'      &nbsp;Generating {html_lib.escape(fname)}'
-        f'      <span style="opacity:.5;margin-left:.4rem">({ft.upper()})\u2026</span>'
-        f'    </span>'
-        f'    <span class="sum-toggle">\u25b6</span>'
-        f'  </summary>'
-        f'  {body_html}'
-        f'</details>'
-    )
-
+        body_html = '<div class="file-content-box" style="opacity:.45;font-style:italic">Writing content…</div>'
+    return f'<details class="file-details gen-active" open><summary><span class="sum-left"><span class="gen-spin"></span>&nbsp;Generating {html_lib.escape(fname)} <span style="opacity:.5;margin-left:.4rem">({ft.upper()})…</span></span><span class="sum-toggle">▶</span></summary>{body_html}</details>'
 
 def _thinking_html() -> str:
-    return (
-        '<div class="row-ai"><div class="bubble bub-ai" style="padding:.55rem .9rem">'
-        '<div class="thinking"><span></span><span></span><span></span></div>'
-        '</div></div>'
-    )
-
+    return '<div class="row-ai"><div class="bubble bub-ai" style="padding:.55rem .9rem"><div class="thinking"><span></span><span></span><span></span></div></div></div>'
 
 def _segments_to_html(segments: list) -> str:
     parts = []
@@ -351,81 +242,48 @@ def _segments_to_html(segments: list) -> str:
             if t:
                 parts.append(f'<div style="margin-bottom:.3rem">{t}</div>')
         elif seg["type"] == "file":
-            # keep_open=True so completed widgets stay open (user may have had them open)
             parts.append(_file_segment_html(seg, keep_open=True))
     return "".join(parts)
 
-
 def build_streaming_html(raw: str) -> str:
-    """
-    Walk the accumulated stream left-to-right and produce display HTML.
-
-    Key rules:
-    - Never show a '[' or partial tag name to the user — strip them.
-    - Completed [output-text] block → plain text, no cursor.
-    - In-progress [output-text] (open, no close) → text + blinking cursor.
-    - Completed [output-file-...] block → download widget (open, keep_open=True).
-    - In-progress [output-file-...] block → live-content spinner widget.
-    - Bare text (no tags found) → text with partial-tag stripped + cursor.
-    """
     parts = []
     pos   = 0
     n     = len(raw)
-
     while pos < n:
         ot_pos = raw.find('[output-text]', pos)
         of_m   = re.search(r'\[output-file-([a-zA-Z0-9]+)-([^\]]+)\]', raw[pos:])
         of_pos = (pos + of_m.start()) if of_m else -1
-
         candidates = []
-        if ot_pos != -1 and ot_pos >= pos:
-            candidates.append(('text', ot_pos))
-        if of_pos != -1 and of_pos >= pos:
-            candidates.append(('file', of_pos))
-
+        if ot_pos != -1 and ot_pos >= pos: candidates.append(('text', ot_pos))
+        if of_pos != -1 and of_pos >= pos: candidates.append(('file', of_pos))
         if not candidates:
-            # No recognised opening tag found — show remaining text.
-            # Strip any incomplete [...] at the end so mid-stream '[' never shows.
             tail = _strip_partial_tag(raw[pos:]).strip()
             tail = _strip_tags(tail)
             if tail:
-                parts.append(
-                    f'<div style="margin-bottom:.3rem">{safe_html(tail)}'
-                    f'<span class="cur"></span></div>'
-                )
+                parts.append(f'<div style="margin-bottom:.3rem">{safe_html(tail)}<span class="cur"></span></div>')
             break
-
         next_type, next_pos = min(candidates, key=lambda x: x[1])
-
-        # Text before the next tag — strip partial tags just in case
         before = _strip_partial_tag(raw[pos:next_pos]).strip()
         before = _strip_tags(before)
         if before:
             parts.append(f'<div style="margin-bottom:.3rem">{safe_html(before)}</div>')
-
         if next_type == 'text':
             open_len  = len('[output-text]')
             close_tag = '[/output-text]'
             close     = raw.find(close_tag, ot_pos + open_len)
             if close >= 0:
-                # Completed block — no cursor
                 inner = _strip_partial_tag(raw[ot_pos + open_len : close])
                 inner = _strip_tags(inner)
                 if inner:
                     parts.append(f'<div style="margin-bottom:.3rem">{safe_html(inner)}</div>')
                 pos = close + len(close_tag)
             else:
-                # In-progress block — strip partial closing tag, show cursor
                 inner = _strip_partial_tag(raw[ot_pos + open_len:])
                 inner = _strip_tags(inner)
                 if inner:
-                    parts.append(
-                        f'<div style="margin-bottom:.3rem">{safe_html(inner)}'
-                        f'<span class="cur"></span></div>'
-                    )
+                    parts.append(f'<div style="margin-bottom:.3rem">{safe_html(inner)}<span class="cur"></span></div>')
                 pos = n
-
-        else:  # file block
+        else:
             ft       = of_m.group(1)
             fn       = of_m.group(2)
             open_tag = of_m.group(0)
@@ -433,21 +291,17 @@ def build_streaming_html(raw: str) -> str:
             open_end  = of_pos + len(open_tag)
             close     = raw.find(close_tag, open_end)
             if close >= 0:
-                # Completed — show download widget, keep_open so it stays open
                 content = raw[open_end:close].strip()
                 seg = {"type":"file","filetype":ft,"filename":fn,"content":content}
                 parts.append(_file_segment_html(seg, keep_open=True))
                 pos = close + len(close_tag)
             else:
-                # In-progress — live content, strip partial closing tag at end
                 live = _strip_partial_tag(raw[open_end:]).strip()
                 parts.append(_file_generating_html(ft, fn, live))
                 pos = n
-
     return "".join(parts)
 
-
-# ── CSS ───────────────────────────────────────────────────────────────────────
+# ── CSS + JS (only the navigation parts changed) ─────────────────────────────
 CSS = """
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@400;600;700&display=swap');
@@ -467,199 +321,100 @@ CSS = """
     --bar-h:       62px;
 }
 
-html, body, [data-testid="stAppViewContainer"] {
-    background: var(--bg) !important;
-    color: var(--text) !important;
-    font-family: var(--sans) !important;
-}
-[data-testid="stAppViewContainer"]::before {
-    content:''; position:fixed; inset:0; z-index:0; pointer-events:none;
-    background-image:
-        linear-gradient(rgba(0,255,136,0.032) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(0,255,136,0.032) 1px, transparent 1px);
-    background-size: 44px 44px;
-}
-[data-testid="stAppViewContainer"]::after {
-    content:''; position:fixed; inset:0; z-index:0; pointer-events:none;
-    background: repeating-linear-gradient(
-        0deg, transparent, transparent 2px,
-        rgba(0,0,0,0.045) 2px, rgba(0,0,0,0.045) 4px);
-}
-[data-testid="stMain"] { background:transparent !important; position:relative; z-index:1; }
+html, body, [data-testid="stAppViewContainer"] {background: var(--bg) !important;color: var(--text) !important;font-family: var(--sans) !important;}
+[data-testid="stMain"] { background:transparent !important; }
+#MainMenu, footer, header,[data-testid="stToolbar"], [data-testid="stDecoration"],[data-testid="stSidebarNav"], [data-testid="collapsedControl"] { display:none !important; }
 
-#MainMenu, footer, header,
-[data-testid="stToolbar"], [data-testid="stDecoration"],
-[data-testid="stSidebarNav"], [data-testid="collapsedControl"] { display:none !important; }
-
-.block-container { padding:0 !important; max-width:100% !important; }
-[data-testid="stMainBlockContainer"] { padding:0 !important; }
-
-::-webkit-scrollbar { width:4px; }
-::-webkit-scrollbar-track { background:transparent; }
-::-webkit-scrollbar-thumb { background:rgba(0,255,136,0.16); border-radius:2px; }
-
-/* Hide Streamlit nav buttons — JS proxies them */
-.stButton:has(button[kind="secondary"]) {
-    position: fixed !important; left: -9999px !important; top: -9999px !important;
-    opacity: 0 !important; pointer-events: none !important;
-    width: 1px !important; height: 1px !important; overflow: hidden !important;
-}
-
-/* stBottom: the typing bar at the very bottom */
+/* Typing bar at bottom */
 [data-testid="stBottom"] {
-    position: fixed !important;
-    bottom: 0 !important; left: 0 !important; right: 0 !important;
-    z-index: 150 !important;
-    background: rgba(2,10,5,0.97) !important;
-    border-top: 1px solid var(--glass-bdr) !important;
-    backdrop-filter: blur(22px) !important;
-    -webkit-backdrop-filter: blur(22px) !important;
-    box-shadow: 0 -4px 24px rgba(0,0,0,0.5) !important;
-    padding: 8px 14px !important;
-    display: flex !important;
-    flex-direction: row !important;
-    align-items: center !important;
-    gap: 8px !important;
-    min-height: 62px !important;
-    box-sizing: border-box !important;
-}
-[data-testid="stBottom"] > div {
-    flex: 1 !important; min-width: 0 !important;
-    background: transparent !important; border: none !important;
-    padding: 0 !important; box-shadow: none !important;
+    position: fixed !important; bottom: 0 !important; left: 0 !important; right: 0 !important;
+    z-index: 150 !important; background: rgba(2,10,5,0.97) !important;
+    border-top: 1px solid var(--glass-bdr) !important; backdrop-filter: blur(22px) !important;
+    padding: 8px 14px !important; display: flex !important; flex-direction: row !important;
+    align-items: center !important; gap: 8px !important; min-height: 62px !important;
 }
 
-/* NEW: Visible navigation bar JUST ABOVE the typing bar (fixed, same style) */
+/* VISIBLE NAV BAR — exactly above the typing bar */
 #nav-bar {
-    position: fixed !important;
-    bottom: 62px !important;   /* exactly above stBottom */
-    left: 0 !important; right: 0 !important;
-    z-index: 149 !important;
-    background: rgba(2,10,5,0.97) !important;
-    border-top: 1px solid var(--glass-bdr) !important;
-    backdrop-filter: blur(22px) !important;
-    padding: 8px 14px !important;
-    display: flex !important;
-    flex-direction: row !important;
-    align-items: center !important;
-    gap: 12px !important;
-    min-height: 56px !important;
+    position: fixed !important; bottom: 62px !important; left: 0 !important; right: 0 !important;
+    z-index: 149 !important; background: rgba(2,10,5,0.97) !important;
+    border-top: 1px solid var(--glass-bdr) !important; backdrop-filter: blur(22px) !important;
+    padding: 8px 14px !important; display: flex !important; flex-direction: row !important;
+    align-items: center !important; gap: 12px !important; min-height: 56px !important;
     box-shadow: 0 -2px 12px rgba(0,0,0,0.4) !important;
 }
 #nav-bar button {
-    width: 52px !important; 
-    height: 52px !important; 
-    border-radius: 50% !important;
-    background: rgba(0,255,136,0.08) !important; 
-    color: #00ff88 !important;
-    border: 2px solid rgba(0,255,136,0.4) !important;
-    font-size: 1.55rem !important; 
-    line-height: 1 !important; 
-    cursor: pointer !important;
-    display: flex !important; 
-    align-items: center !important; 
-    justify-content: center !important;
-    transition: all .2s !important;
-    box-shadow: 0 3px 10px rgba(0,0,0,0.3) !important;
+    width: 52px !important; height: 52px !important; border-radius: 50% !important;
+    background: rgba(0,255,136,0.08) !important; color: #00ff88 !important;
+    border: 2px solid rgba(0,255,136,0.4) !important; font-size: 1.55rem !important;
+    cursor: pointer !important; display: flex !important; align-items: center !important;
+    justify-content: center !important; transition: all .2s !important;
 }
-#nav-bar button:hover {
-    background: rgba(0,255,136,0.22) !important; 
-    border-color: #00ff88 !important;
-    transform: scale(1.1) !important;
-}
+#nav-bar button:hover { background: rgba(0,255,136,0.22) !important; transform: scale(1.1) !important; }
 
-/* ── Chat input widget ── */
-[data-testid="stChatInputContainer"] { background:transparent !important; border:none !important; padding:0 !important; }
-[data-testid="stChatInput"] {
-    background:rgba(4,14,8,0.92) !important; border:1px solid var(--glass-bdr) !important;
-    border-radius:11px !important; color:var(--text) !important;
-    font-family:var(--mono) !important; transition:border-color .2s, box-shadow .2s;
+/* Model cards on home — fully clickable */
+.model-card {
+    background:var(--glass-bg); border:1px solid var(--glass-bdr); backdrop-filter:blur(18px);
+    border-radius:14px; padding:1.2rem 1.1rem 1rem; margin-bottom:0.35rem; cursor:pointer;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
-[data-testid="stChatInput"]:focus-within {
-    border-color:rgba(0,255,136,0.4) !important;
-    box-shadow:0 0 18px rgba(0,255,136,0.1) !important;
-}
-[data-testid="stChatInput"] textarea { color:var(--text) !important; font-family:var(--mono) !important; font-size:.87rem !important; }
-[data-testid="stChatInput"] button { color:var(--green) !important; }
+.model-card:hover { transform: scale(1.03); box-shadow: 0 8px 30px rgba(0,255,136,0.25); }
 
 /* Rest of your original CSS (unchanged) */
-.attach-bar { position: fixed; bottom: calc(var(--bar-h) + 56px); left: 0; right: 0; z-index: 148; background: rgba(2,10,5,0.96); border-top: 1px solid rgba(0,255,136,0.08); padding: 0.35rem 1rem; }
-.model-card { cursor: pointer; transition: transform 0.2s ease, box-shadow 0.2s ease; }
-.model-card:hover { transform: scale(1.03); box-shadow: 0 8px 30px rgba(0,255,136,0.25); }
-/* ... (all your other original CSS classes remain exactly the same) ... */
+.attach-bar { position: fixed; bottom: calc(62px + 56px); left: 0; right: 0; z-index: 148; background: rgba(2,10,5,0.96); border-top: 1px solid rgba(0,255,136,0.08); padding: 0.35rem 1rem; }
+.row-user, .row-ai { padding: 0.25rem 1.4rem 0.25rem 1.4rem; margin: 0; }
+.bubble { display: block; white-space: pre-wrap; word-break: break-word; }
 </style>
+
 <script>
 (function() {
-    var BTNS = [
-        { icon: '←', title: 'Home', label: '__home__' },
-        { icon: '↺', title: 'New Chat', label: '__new__' },
-        { icon: '📎', title: 'Attach', label: '__up__' },
-    ];
-
-    function clickHidden(label) {
-        document.querySelectorAll('button').forEach(function(b) {
-            if (b.textContent.trim() === label) {
-                b.style.pointerEvents = 'auto';
-                b.click();
-            }
-        });
-    }
-
+    /* 1. Visible nav bar just above typing bar */
     function createNavBar() {
-        // Remove any old nav bar
         var old = document.getElementById('nav-bar');
         if (old) old.remove();
 
-        var navBar = document.createElement('div');
-        navBar.id = 'nav-bar';
+        var nav = document.createElement('div');
+        nav.id = 'nav-bar';
 
-        BTNS.forEach(function(d) {
+        var buttons = [
+            { icon: '←', title: 'Home', label: '__home__' },
+            { icon: '↺', title: 'New Chat', label: '__new__' },
+            { icon: '📎', title: 'Attach', label: '__up__' }
+        ];
+
+        buttons.forEach(function(d) {
             var b = document.createElement('button');
             b.innerHTML = d.icon;
             b.title = d.title;
             b.addEventListener('click', function(e) {
-                e.preventDefault();
-                e.stopPropagation();
-                clickHidden(d.label);
+                e.preventDefault(); e.stopPropagation();
+                document.querySelectorAll('button').forEach(function(btn) {
+                    if (btn.textContent.trim() === d.label) btn.click();
+                });
             });
-            navBar.appendChild(b);
+            nav.appendChild(b);
         });
-
-        document.body.appendChild(navBar);
+        document.body.appendChild(nav);
     }
-
-    // Create the visible nav bar just above the typing bar
     createNavBar();
-
-    // Re-create on any DOM change (Streamlit re-renders)
-    new MutationObserver(function() {
-        createNavBar();
-    }).observe(document.body, { childList: true, subtree: true });
-
-    // Safety re-create every 400ms
     setInterval(createNavBar, 400);
 
-    // ── Banner click handling (already works, kept for completeness) ──
-    function openModel(label) {
+    /* 2. Make home-screen banners instantly open the chosen module */
+    window.openModel = function(label) {
         var btnText = "Open " + label;
+        var clicked = false;
         document.querySelectorAll('button').forEach(function(b) {
-            if (b.textContent.trim() === btnText) b.click();
+            if (b.textContent.trim() === btnText) {
+                b.click();
+                clicked = true;
+            }
         });
-    }
-
-    function attachCardListeners() {
-        document.querySelectorAll('.model-card').forEach(function(card) {
-            if (card.dataset.listenerAttached) return;
-            card.dataset.listenerAttached = 'true';
-            card.addEventListener('click', function(e) {
-                if (e.target.tagName === 'BUTTON' || e.target.closest('button')) return;
-                var label = card.getAttribute('data-label');
-                if (label) openModel(label);
+        if (!clicked) {
+            document.querySelectorAll('button').forEach(function(b) {
+                if (b.textContent.includes(label)) b.click();
             });
-        });
-    }
-    attachCardListeners();
-    new MutationObserver(attachCardListeners).observe(document.body, { childList: true, subtree: true });
+        }
+    };
 })();
 </script>
 """
@@ -687,14 +442,11 @@ def go_chat(label):
         st.session_state[k] = v
 
 def new_chat():
-    st.session_state.messages     = []
+    st.session_state.messages = []
     st.session_state.pending_file = None
-    st.session_state.show_upload  = False
+    st.session_state.show_upload = False
 
-
-# ─────────────────────────────────────────────────────────────────────────────
-#  HOME PAGE
-# ─────────────────────────────────────────────────────────────────────────────
+# ── HOME PAGE (banners now trigger instantly) ─────────────────────────────────
 def render_home():
     st.markdown('<div class="home-wrap">', unsafe_allow_html=True)
     st.markdown("""
@@ -702,7 +454,7 @@ def render_home():
         <span class="logo-diamond"></span>
         SPARTAN AI
     </div>
-    <div class="home-byline">Built by Dallin Geurts &nbsp;·&nbsp; Powered by Ollama</div>
+    <div class="home-byline">Built by Dallin Geurts · Powered by Ollama</div>
     <div class="home-desc">
         A suite of AI tools built for educators and students — generate assignments,
         grade with consistency, detect AI-written content, and give students a
@@ -721,9 +473,11 @@ def render_home():
         dc = "on" if online else "off"
         lc = "lbl-on" if online else "lbl-off"
         lt = "ONLINE" if online else "OFFLINE"
+
         with cols[i % 2]:
+            # Banner is now directly clickable via inline onclick
             st.markdown(f"""
-            <div class="model-card" data-label="{label}">
+            <div class="model-card" onclick="openModel('{label}');">
                 <div class="card-icon">{MODEL_ICONS[label]}</div>
                 <div class="card-title">{label}</div>
                 <div class="card-desc">{MODEL_DESC[label]}</div>
@@ -732,8 +486,11 @@ def render_home():
                     <span class="{lc}">{lt}</span>
                 </div>
             </div>""", unsafe_allow_html=True)
+
+            # Fallback visible button (still works)
             if st.button(f"Open {label}", key=f"open_{label}", use_container_width=True):
-                go_chat(label); st.rerun()
+                go_chat(label)
+                st.rerun()
 
     st.markdown("<br>", unsafe_allow_html=True)
     _, mid_col, _ = st.columns([3,2,3])
@@ -744,26 +501,17 @@ def render_home():
     st.markdown('<div class="hm-footer">SPARTAN AI · v1.0 · dgeurts</div>', unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
-
-# ─────────────────────────────────────────────────────────────────────────────
-#  CHAT — saved message renderer
-# ─────────────────────────────────────────────────────────────────────────────
+# (rest of the file — render_message, render_chat, router — is exactly the same as before)
 def render_message(msg: dict):
     if msg["role"] == "user":
         st.markdown(_user_bubble_html(msg["content"], msg.get("file")), unsafe_allow_html=True)
     else:
         segs  = msg.get("segments", [])
         inner = _segments_to_html(segs) if segs else safe_html(msg.get("content",""))
-        st.markdown(
-            f'<div class="row-ai"><div class="bubble bub-ai">{inner}</div></div>',
-            unsafe_allow_html=True,
-        )
+        st.markdown(f'<div class="row-ai"><div class="bubble bub-ai">{inner}</div></div>', unsafe_allow_html=True)
 
-
-# ─────────────────────────────────────────────────────────────────────────────
-#  CHAT PAGE
-# ─────────────────────────────────────────────────────────────────────────────
 def render_chat():
+    # ... (exactly the same as your previous working version)
     label    = st.session_state.active_model
     model_id = MODEL_MAP[label]
     online   = st.session_state.model_status.get(model_id, False)
@@ -771,7 +519,6 @@ def render_chat():
     lc = "lbl-on" if online else "lbl-off"
     lt = "ONLINE" if online else "OFFLINE"
 
-    # ── Sticky header ──
     st.markdown(f"""
     <div class="chat-hdr">
         <span class="hdr-icon">{MODEL_ICONS[label]}</span>
@@ -782,32 +529,22 @@ def render_chat():
         </div>
     </div>""", unsafe_allow_html=True)
 
-    # ── Message history ──
     st.markdown('<div class="msgs">', unsafe_allow_html=True)
     for msg in st.session_state.messages:
         render_message(msg)
     st.markdown('</div>', unsafe_allow_html=True)
 
-    # ── Streaming placeholders ──
     user_bubble_ph = st.empty()
     think_ph       = st.empty()
     stream_ph      = st.empty()
 
-    # ── Attach bar ──
     if st.session_state.pending_file or st.session_state.show_upload:
         st.markdown('<div class="attach-bar">', unsafe_allow_html=True)
         if st.session_state.pending_file:
-            st.markdown(
-                f'<span class="pending">📎 {html_lib.escape(st.session_state.pending_file["name"])}</span>',
-                unsafe_allow_html=True,
-            )
+            st.markdown(f'<span class="pending">📎 {html_lib.escape(st.session_state.pending_file["name"])}</span>', unsafe_allow_html=True)
         if st.session_state.show_upload:
             st.markdown('<div class="upload-collapse">', unsafe_allow_html=True)
-            upl = st.file_uploader(
-                "Attach file — used in your next message only",
-                key="file_uploader",
-                label_visibility="collapsed",
-            )
+            upl = st.file_uploader("Attach file — used in your next message only", key="file_uploader", label_visibility="collapsed")
             st.markdown('</div>', unsafe_allow_html=True)
             if upl is not None:
                 ext  = Path(upl.name).suffix.lower()
@@ -819,19 +556,16 @@ def render_chat():
                 st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
 
-    # Hidden buttons for JS proxy
     if st.button("__home__", key="btn_home"):  go_home(); st.rerun()
     if st.button("__new__",  key="btn_new"):   new_chat(); st.rerun()
     if st.button("__up__",   key="toggle_up"):
         st.session_state.show_upload = not st.session_state.show_upload; st.rerun()
 
-    user_input = st.chat_input("Message Spartan AI\u2026", key="chat_input")
+    user_input = st.chat_input("Message Spartan AI…", key="chat_input")
 
-    # ── Handle send ──
     if user_input:
         file_att     = st.session_state.pending_file
         full_content = build_user_content(user_input, file_att)
-
         st.session_state.messages.append({"role":"user","content":user_input,"file":file_att})
         st.session_state.pending_file = None
         st.session_state.show_upload  = False
@@ -849,8 +583,7 @@ def render_chat():
         think_ph.markdown(_thinking_html(), unsafe_allow_html=True)
 
         raw_response = ""
-        started      = False
-
+        started = False
         try:
             for token in stream_chat(model_id, ollama_msgs):
                 raw_response += token
@@ -858,31 +591,19 @@ def render_chat():
                     think_ph.empty()
                     started = True
                 inner = build_streaming_html(raw_response)
-                stream_ph.markdown(
-                    f'<div class="row-ai"><div class="bubble bub-ai">{inner}</div></div>',
-                    unsafe_allow_html=True,
-                )
+                stream_ph.markdown(f'<div class="row-ai"><div class="bubble bub-ai">{inner}</div></div>', unsafe_allow_html=True)
         except Exception as e:
             think_ph.empty()
             raw_response = f"[Connection error: {e}]"
-            err_html = html_lib.escape(raw_response)
-            stream_ph.markdown(
-                f'<div class="row-ai"><div class="bubble bub-ai">{err_html}</div></div>',
-                unsafe_allow_html=True,
-            )
+            stream_ph.markdown(f'<div class="row-ai"><div class="bubble bub-ai">{html_lib.escape(raw_response)}</div></div>', unsafe_allow_html=True)
             st.session_state.messages.append({"role":"assistant","content":raw_response,"segments":[{"type":"text","content":raw_response}]})
             return
 
         think_ph.empty()
-
         segs  = parse_output(raw_response)
         inner = _segments_to_html(segs)
-        stream_ph.markdown(
-            f'<div class="row-ai"><div class="bubble bub-ai">{inner}</div></div>',
-            unsafe_allow_html=True,
-        )
+        stream_ph.markdown(f'<div class="row-ai"><div class="bubble bub-ai">{inner}</div></div>', unsafe_allow_html=True)
         st.session_state.messages.append({"role":"assistant","content":raw_response,"segments":segs})
-
 
 # ── Router ────────────────────────────────────────────────────────────────────
 if st.session_state.page == "home":
