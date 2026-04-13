@@ -174,8 +174,7 @@ def _strip_partial_tag(s: str) -> str:
 
 
 def safe_html(text: str) -> str:
-    cleaned = str(text).strip()
-    cleaned = re.sub(r'[\r\n\t]+', ' ', cleaned)
+    cleaned = re.sub(r'[\r\n\t]+', ' ', str(text).strip())
     cleaned = re.sub(r' {2,}', ' ', cleaned)
     return html_lib.escape(cleaned)
 
@@ -499,7 +498,14 @@ html, body, [data-testid="stAppViewContainer"] {
 ::-webkit-scrollbar-track { background:transparent; }
 ::-webkit-scrollbar-thumb { background:rgba(0,255,136,0.16); border-radius:2px; }
 
-/* ── stBottom: fixed bottom bar, flex row, buttons injected by JS on left ── */
+/* Hide Streamlit nav buttons — JS proxies them inside stBottom */
+.stButton:has(button[kind="secondary"]) {
+    position: fixed !important; left: -9999px !important; top: -9999px !important;
+    opacity: 0 !important; pointer-events: none !important;
+    width: 1px !important; height: 1px !important; overflow: hidden !important;
+}
+
+/* stBottom: position:fixed bottom:0 — the actual bar */
 [data-testid="stBottom"] {
     position: fixed !important;
     bottom: 0 !important; left: 0 !important; right: 0 !important;
@@ -517,44 +523,28 @@ html, body, [data-testid="stAppViewContainer"] {
     min-height: 62px !important;
     box-sizing: border-box !important;
 }
-/* Chat input wrapper fills remaining space */
 [data-testid="stBottom"] > div {
-    flex: 1 !important;
-    min-width: 0 !important;
-    background: transparent !important;
-    border: none !important;
-    padding: 0 !important;
-    box-shadow: none !important;
+    flex: 1 !important; min-width: 0 !important;
+    background: transparent !important; border: none !important;
+    padding: 0 !important; box-shadow: none !important;
 }
-/* The injected nav group inside stBottom */
+
+/* Nav group JS-injected directly inside stBottom */
 #injected-nav {
-    display: flex !important;
-    flex-direction: row !important;
-    align-items: center !important;
-    gap: 6px !important;
-    flex-shrink: 0 !important;
+    display: flex !important; flex-direction: row !important;
+    align-items: center !important; gap: 6px !important; flex-shrink: 0 !important;
 }
 #injected-nav button {
-    width: 40px !important;
-    height: 40px !important;
-    border-radius: 50% !important;
-    background: rgba(0,255,136,0.04) !important;
-    color: #00ff88 !important;
+    width: 40px !important; height: 40px !important; border-radius: 50% !important;
+    background: rgba(0,255,136,0.04) !important; color: #00ff88 !important;
     border: 1px solid rgba(0,255,136,0.22) !important;
-    font-size: 1.15rem !important;
-    line-height: 1 !important;
-    cursor: pointer !important;
-    display: flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-    flex-shrink: 0 !important;
-    transition: background 0.18s, border-color 0.18s, box-shadow 0.18s !important;
-    padding: 0 !important;
-    font-family: inherit !important;
+    font-size: 1.15rem !important; line-height: 1 !important; cursor: pointer !important;
+    display: flex !important; align-items: center !important; justify-content: center !important;
+    transition: background .18s, border-color .18s !important;
+    padding: 0 !important; flex-shrink: 0 !important; font-family: inherit !important;
 }
 #injected-nav button:hover {
-    background: rgba(0,255,136,0.12) !important;
-    border-color: #00ff88 !important;
+    background: rgba(0,255,136,0.12) !important; border-color: #00ff88 !important;
     box-shadow: 0 0 14px rgba(0,255,136,0.2) !important;
 }
 #injected-nav button:active { transform: scale(0.94) !important; }
@@ -712,62 +702,51 @@ details.file-details .copy-btn.copied { background:rgba(0,255,136,0.18) !importa
 <script>
 (function() {
     var BTNS = [
-        { icon: '\u2190',      title: 'Home',        key: 'btn_home' },
-        { icon: '\u21ba',      title: 'New Chat',     key: 'btn_new'  },
-        { icon: '\U0001f4ce',  title: 'Attach File',  key: 'toggle_up' },
+        { icon: '←',     title: 'Home',     label: '__home__' },
+        { icon: '↺',     title: 'New Chat',  label: '__new__'  },
+        { icon: '📎', title: 'Attach',    label: '__up__'   },
     ];
 
-    function clickHidden(key) {
-        // Streamlit renders button text as the label we passed — "home", "new", "up"
-        var map = { btn_home: 'home', btn_new: 'new', toggle_up: 'up' };
-        var label = map[key];
-        var found = null;
+    function clickHidden(label) {
         document.querySelectorAll('button').forEach(function(b) {
-            if (b.textContent.trim() === label) found = b;
+            if (b.textContent.trim() === label) {
+                b.style.pointerEvents = 'auto';
+                b.click();
+            }
         });
-        if (found) found.click();
     }
 
     function inject() {
         var bottom = document.querySelector('[data-testid="stBottom"]');
         if (!bottom) return;
+        var existing = document.getElementById('injected-nav');
+        if (existing && existing.parentNode === bottom) return;
+        if (existing) existing.remove();
 
-        // Already injected and still there
-        if (document.getElementById('injected-nav') &&
-            document.getElementById('injected-nav').parentNode === bottom) return;
-
-        // Remove stale one if parent changed
-        var old = document.getElementById('injected-nav');
-        if (old) old.remove();
-
-        // Build the nav group
         var nav = document.createElement('div');
         nav.id = 'injected-nav';
-
         BTNS.forEach(function(d) {
             var b = document.createElement('button');
             b.textContent = d.icon;
             b.title = d.title;
+            b.type = 'button';
             b.addEventListener('click', function(e) {
-                e.preventDefault();
-                clickHidden(d.key);
+                e.preventDefault(); e.stopPropagation();
+                clickHidden(d.label);
             });
             nav.appendChild(b);
         });
 
-        // Insert as FIRST child of stBottom (before the chat input div)
         bottom.insertBefore(nav, bottom.firstChild);
 
-        // Ensure the chat input sibling grows to fill remaining space
-        var inp = bottom.querySelector('[data-testid="stChatInputContainer"]');
-        if (!inp) inp = bottom.children[bottom.children.length - 1];
-        if (inp && inp !== nav) {
-            inp.style.flex = '1';
-            inp.style.minWidth = '0';
-        }
+        Array.from(bottom.children).forEach(function(ch) {
+            if (ch.id !== 'injected-nav') {
+                ch.style.flex = '1';
+                ch.style.minWidth = '0';
+            }
+        });
     }
 
-    // Run on load and after every Streamlit re-render
     inject();
     new MutationObserver(function(muts) {
         for (var i = 0; i < muts.length; i++) {
@@ -933,13 +912,11 @@ def render_chat():
                 st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
 
-    # ── Hidden Streamlit buttons — JS proxy buttons in stBottom will click these ──
-    st.markdown('<div id="st-nav-btns" style="display:none">', unsafe_allow_html=True)
-    if st.button("home", key="btn_home"):  go_home(); st.rerun()
-    if st.button("new",  key="btn_new"):   new_chat(); st.rerun()
-    if st.button("up",   key="toggle_up"):
+    # Hidden Streamlit buttons — clicked by JS proxy buttons inside stBottom
+    if st.button("__home__", key="btn_home"):  go_home(); st.rerun()
+    if st.button("__new__",  key="btn_new"):   new_chat(); st.rerun()
+    if st.button("__up__",   key="toggle_up"):
         st.session_state.show_upload = not st.session_state.show_upload; st.rerun()
-    st.markdown('</div>', unsafe_allow_html=True)
 
     user_input = st.chat_input("Message Spartan AI\u2026", key="chat_input")
 
