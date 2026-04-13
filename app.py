@@ -18,22 +18,18 @@ AUTH            = (USERNAME, PASSWORD)
 # ── Web search helper ──────
 
 def web_search(query: str, num_results: int = 5) -> str:
-    # Perform a DuckDuckGo search and return formatted text results.
     try:
         encoded = requests.utils.quote(query)
         hdrs = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
         url = f"https://api.duckduckgo.com/?q={encoded}&format=json&no_html=1&skip_disambig=1"
         data = requests.get(url, headers=hdrs, timeout=8).json()
         results = []
-        if data.get("Answer"):
-            results.append(f'Direct Answer: {data["Answer"]}')
-        if data.get("AbstractText"):
-            results.append(f'Summary: {data["AbstractText"]}')
+        if data.get("Answer"): results.append(f'Direct Answer: {data["Answer"]}')
+        if data.get("AbstractText"): results.append(f'Summary: {data["AbstractText"]}')
         for topic in data.get("RelatedTopics", [])[:num_results]:
             if isinstance(topic, dict) and topic.get("Text"):
                 results.append(f'- {topic["Text"]}')
-        if results:
-            return "\n".join(results)
+        if results: return "\n".join(results)
         r2 = requests.get(f"https://html.duckduckgo.com/html/?q={encoded}", headers=hdrs, timeout=8)
         snippets = re.findall(r'class="result__snippet"[^>]*>(.*?)</a>', r2.text, re.DOTALL)[:num_results]
         titles   = re.findall(r'class="result__a"[^>]*>(.*?)</a>',        r2.text, re.DOTALL)[:num_results]
@@ -42,7 +38,7 @@ def web_search(query: str, num_results: int = 5) -> str:
             for i, snip in enumerate(snippets):
                 clean = re.sub(r"<[^>]+>", "", snip).strip()
                 title = re.sub(r"<[^>]+>", "", titles[i]).strip() if i < len(titles) else ""
-                out.append(f'{i+1}. {(title + ": ") if title else ""}{clean}')
+                out.append(f'{i+1}. {(title+": ") if title else ""}{clean}')
             return "\n".join(out)
         return "No results found."
     except Exception as e:
@@ -535,60 +531,63 @@ html, body, [data-testid="stAppViewContainer"] {
 ::-webkit-scrollbar-track { background:transparent; }
 ::-webkit-scrollbar-thumb { background:rgba(0,255,136,0.16); border-radius:2px; }
 
-/* Only hide the three specific proxy buttons by key — not ALL secondary buttons */
-/* JS handles this — see script below */
+/* Proxy nav buttons: fully removed from document flow */
+.stButton:has(button[kind="secondary"]) {
+    display: none !important;
+}
 
-/* stBottom: chat input bar, raised above our nav strip */
+/* stBottom: fixed at bottom, tall enough for input + nav row */
 [data-testid="stBottom"] {
     position: fixed !important;
-    bottom: 42px !important; left: 0 !important; right: 0 !important;
+    bottom: 0 !important; left: 0 !important; right: 0 !important;
     z-index: 150 !important;
     background: rgba(2,10,5,0.97) !important;
     border-top: 1px solid var(--glass-bdr) !important;
     backdrop-filter: blur(22px) !important;
     -webkit-backdrop-filter: blur(22px) !important;
     box-shadow: 0 -4px 24px rgba(0,0,0,0.5) !important;
-    padding: 8px 14px !important;
-    min-height: 58px !important;
+    padding: 8px 14px 4px !important;
     box-sizing: border-box !important;
 }
+[data-testid="stBottom"] > div {
+    background: transparent !important; border: none !important;
+    padding: 0 !important; box-shadow: none !important;
+    display: flex !important; flex-direction: column !important;
+    gap: 4px !important;
+}
 
-/* Spartan nav strip — sits below the input bar, above nothing */
 #spartan-nav {
-    position: fixed !important;
-    bottom: 0 !important; left: 0 !important; right: 0 !important;
-    height: 42px !important;
-    z-index: 160 !important;
-    background: rgba(2,10,5,0.99) !important;
-    border-top: 1px solid rgba(0,255,136,0.12) !important;
     display: flex !important;
     flex-direction: row !important;
     align-items: center !important;
-    justify-content: center !important;
-    gap: 10px !important;
-    padding: 0 !important;
-    box-sizing: border-box !important;
+    justify-content: flex-start !important;
+    gap: 6px !important;
+    padding: 2px 2px 4px !important;
 }
 #spartan-nav button {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 5px !important;
     height: 28px !important;
-    padding: 0 16px !important;
-    border-radius: 5px !important;
+    padding: 0 12px !important;
+    border-radius: 6px !important;
     background: rgba(0,255,136,0.05) !important;
     color: #00ff88 !important;
-    border: 1px solid rgba(0,255,136,0.25) !important;
-    font-size: 0.72rem !important;
+    border: 1px solid rgba(0,255,136,0.22) !important;
+    font-size: 0.70rem !important;
     font-family: 'Share Tech Mono', monospace !important;
-    letter-spacing: 0.07em !important;
+    letter-spacing: 0.06em !important;
     cursor: pointer !important;
-    transition: background .15s, border-color .15s, box-shadow .15s !important;
+    transition: background .15s, border-color .15s !important;
     white-space: nowrap !important;
-    line-height: 1 !important;
-    text-transform: uppercase !important;
+    flex-shrink: 0 !important;
 }
+#spartan-nav button svg { flex-shrink: 0 !important; }
 #spartan-nav button:hover {
-    background: rgba(0,255,136,0.14) !important;
+    background: rgba(0,255,136,0.13) !important;
     border-color: #00ff88 !important;
-    box-shadow: 0 0 12px rgba(0,255,136,0.2) !important;
+    box-shadow: 0 0 10px rgba(0,255,136,0.18) !important;
 }
 #spartan-nav button:active { transform: scale(0.96) !important; }
 
@@ -657,24 +656,8 @@ html, body, [data-testid="stAppViewContainer"] {
 .home-desc { font-family:var(--sans); font-size:1rem; color:rgba(200,255,224,0.72); text-align:center; max-width:540px; margin:1.5rem auto 0; line-height:1.75; }
 hr.div { border:none; border-top:1px solid var(--glass-bdr); margin:2rem 0 1.6rem; }
 .sec-label { font-family:var(--mono); font-size:0.66rem; color:var(--text-dim); letter-spacing:0.3em; text-transform:uppercase; text-align:center; margin-bottom:1.3rem; }
-.model-card { background:var(--glass-bg); border:1px solid var(--glass-bdr); backdrop-filter:blur(18px); -webkit-backdrop-filter:blur(18px); border-radius:14px; padding:1.2rem 1.1rem 1rem; position:relative; overflow:hidden; box-shadow:0 4px 22px rgba(0,0,0,0.5),0 0 0 1px var(--glass-shine) inset; margin-bottom:0; cursor:pointer; transition:border-color .2s, box-shadow .2s; }
+.model-card { background:var(--glass-bg); border:1px solid var(--glass-bdr); backdrop-filter:blur(18px); -webkit-backdrop-filter:blur(18px); border-radius:14px; padding:1.2rem 1.1rem 1rem; position:relative; overflow:hidden; box-shadow:0 4px 22px rgba(0,0,0,0.5),0 0 0 1px var(--glass-shine) inset; margin-bottom:0.35rem; }
 .model-card::before { content:''; position:absolute; top:0; left:0; right:0; height:1px; background:linear-gradient(90deg,transparent,var(--green),transparent); opacity:0.35; }
-/* Card-style st.button — makes the whole card the click target */
-.card-btn > button {
-    background: transparent !important;
-    border: none !important;
-    padding: 0 !important;
-    width: 100% !important;
-    text-align: left !important;
-    cursor: pointer !important;
-    display: block !important;
-    margin-bottom: 1rem !important;
-}
-.card-btn > button:hover {
-    background: transparent !important;
-    box-shadow: none !important;
-}
-.card-btn > button p { display: none !important; }
 .card-icon  { font-size:1.6rem; line-height:1; margin-bottom:0.4rem; }
 .card-title { font-family:var(--sans); font-weight:700; font-size:1rem; color:var(--green); letter-spacing:0.04em; margin-bottom:0.25rem; }
 .card-desc  { font-family:var(--sans); font-size:0.84rem; color:var(--text-dim); line-height:1.5; }
@@ -693,7 +676,7 @@ hr.div { border:none; border-top:1px solid var(--glass-bdr); margin:2rem 0 1.6re
 .hdr-status { display:flex; align-items:center; gap:5px; font-family:var(--mono); font-size:0.68rem; }
 
 /* ── Messages: enough bottom padding to fully clear the fixed bar ── */
-.msgs { padding: 1rem 0 115px; }
+.msgs { padding: 1rem 0 105px; }
 
 /* ── Chat bubbles: max-width cap + breathing room on both sides ── */
 .row-user {
@@ -760,80 +743,75 @@ details.file-details .copy-btn.copied { background:rgba(0,255,136,0.18) !importa
 </style>
 <script>
 (function() {
-    // Proxy button texts (rendered off-screen by Streamlit, clicked by JS)
-    var PROXIES = ['__home__', '__new__', '__up__'];
-    var BTNS = [
-        { text: '← Home',       proxy: '__home__' },
-        { text: '↺ New Chat',   proxy: '__new__'  },
-        { text: '📎 Attach', proxy: '__up__'   },
-    ];
+  var PROXIES = ["__home__", "__new__", "__up__"];
+  var BTNS = [
+    { svg: "<svg width=\"14\" height=\"14\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M3 9.5L12 3l9 6.5V20a1 1 0 01-1 1H5a1 1 0 01-1-1V9.5z\"/><polyline points=\"9 22 9 12 15 12 15 22\"/></svg>", label: "Home",     proxy: "__home__" },
+    { svg: "<svg width=\"14\" height=\"14\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><polyline points=\"1 4 1 10 7 10\"/><path d=\"M3.51 15a9 9 0 102.13-9.36L1 10\"/></svg>", label: "New",      proxy: "__new__"  },
+    { svg: "<svg width=\"14\" height=\"14\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48\"/></svg>", label: "Attach",   proxy: "__up__"   },
+  ];
 
-    function clickProxy(proxy) {
-        var all = document.querySelectorAll('button');
-        for (var i = 0; i < all.length; i++) {
-            if (all[i].textContent.trim() === proxy) {
-                all[i].style.pointerEvents = 'auto';
-                all[i].click();
-                return;
-            }
+  // Fully remove proxy buttons from the page
+  function hideProxies() {
+    document.querySelectorAll("button").forEach(function(b) {
+      if (PROXIES.indexOf(b.textContent.trim()) !== -1) {
+        var el = b;
+        while (el && el !== document.body) {
+          if (el.classList && el.classList.contains("stButton")) {
+            el.style.display = "none";
+            break;
+          }
+          el = el.parentElement;
         }
-    }
+      }
+    });
+  }
 
-    // Hide proxy buttons without touching any other buttons
-    function hideProxies() {
-        var all = document.querySelectorAll('button');
-        for (var i = 0; i < all.length; i++) {
-            var txt = all[i].textContent.trim();
-            if (PROXIES.indexOf(txt) !== -1) {
-                // Walk up to the stButton wrapper div and hide that
-                var el = all[i];
-                while (el && el !== document.body) {
-                    if (el.classList && el.classList.contains('stButton')) {
-                        el.style.position = 'fixed';
-                        el.style.left = '-9999px';
-                        el.style.top = '-9999px';
-                        el.style.width = '1px';
-                        el.style.height = '1px';
-                        el.style.overflow = 'hidden';
-                        el.style.opacity = '0';
-                        break;
-                    }
-                    el = el.parentElement;
-                }
-            }
-        }
+  function clickProxy(proxy) {
+    var all = document.querySelectorAll("button");
+    for (var i = 0; i < all.length; i++) {
+      if (all[i].textContent.trim() === proxy) {
+        all[i].style.display = "";
+        all[i].click();
+        return;
+      }
     }
+  }
 
-    // Create the nav bar once and append to body
-    function ensureNav() {
-        if (document.getElementById('spartan-nav')) return;
-        var nav = document.createElement('div');
-        nav.id = 'spartan-nav';
-        BTNS.forEach(function(d) {
-            var b = document.createElement('button');
-            b.textContent = d.text;
-            b.type = 'button';
-            b.addEventListener('click', function(e) {
-                e.preventDefault();
-                e.stopPropagation();
-                clickProxy(d.proxy);
-            });
-            nav.appendChild(b);
-        });
-        document.body.appendChild(nav);
+  // Inject #spartan-nav as the LAST child of stBottom > div
+  // so it appears below the chat input (column flex layout)
+  function inject() {
+    // Target: the direct div child of stBottom that wraps the input
+    var bottom = document.querySelector('[data-testid="stBottom"]');
+    if (!bottom) return;
+    var wrapper = bottom.querySelector(':scope > div');
+    if (!wrapper) return;
+    if (document.getElementById("spartan-nav")) return;
+
+    var nav = document.createElement("div");
+    nav.id = "spartan-nav";
+
+    BTNS.forEach(function(d) {
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.title = d.label;
+      btn.innerHTML = d.svg + "<span>" + d.label + "</span>";
+      btn.addEventListener("click", function(e) {
+        e.preventDefault(); e.stopPropagation();
+        clickProxy(d.proxy);
+      });
+      nav.appendChild(btn);
+    });
+
+    wrapper.appendChild(nav);
+  }
+
+  function tick() { inject(); hideProxies(); }
+  tick();
+  new MutationObserver(function(muts) {
+    for (var i = 0; i < muts.length; i++) {
+      if (muts[i].addedNodes.length) { tick(); break; }
     }
-
-    function tick() {
-        ensureNav();
-        hideProxies();
-    }
-
-    tick();
-    new MutationObserver(function(muts) {
-        for (var i = 0; i < muts.length; i++) {
-            if (muts[i].addedNodes.length) { tick(); break; }
-        }
-    }).observe(document.body, { childList: true, subtree: true });
+  }).observe(document.body, { childList: true, subtree: true });
 })();
 </script>
 """
@@ -896,25 +874,16 @@ def render_home():
         lc = "lbl-on" if online else "lbl-off"
         lt = "ONLINE" if online else "OFFLINE"
         with cols[i % 2]:
-            # Wrap the card HTML in a container div, then put the st.button
-            # on top of it via CSS absolute positioning so clicking anywhere
-            # on the card triggers navigation.
-            card_html = (
-                f'<div class="model-card-wrap" style="position:relative;margin-bottom:1rem">'
-                f'<div class="model-card">'
-                f'<div class="card-icon">{MODEL_ICONS[label]}</div>'
-                f'<div class="card-title">{label}</div>'
-                f'<div class="card-desc">{MODEL_DESC[label]}</div>'
-                f'<div class="card-status">'
-                f'<span class="dot {dc}"></span>'
-                f'<span class="{lc}">{lt}</span>'
-                f'</div>'
-                f'<div style="margin-top:.8rem;font-family:var(--mono);font-size:.72rem;'
-                f'color:var(--green);opacity:.7;letter-spacing:.1em">TAP TO OPEN ▶</div>'
-                f'</div>'
-                f'</div>'
-            )
-            st.markdown(card_html, unsafe_allow_html=True)
+            st.markdown(f"""
+            <div class="model-card">
+                <div class="card-icon">{MODEL_ICONS[label]}</div>
+                <div class="card-title">{label}</div>
+                <div class="card-desc">{MODEL_DESC[label]}</div>
+                <div class="card-status">
+                    <span class="dot {dc}"></span>
+                    <span class="{lc}">{lt}</span>
+                </div>
+            </div>""", unsafe_allow_html=True)
             if st.button(f"Open {label}", key=f"open_{label}", use_container_width=True):
                 go_chat(label); st.rerun()
 
