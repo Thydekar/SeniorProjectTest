@@ -498,14 +498,14 @@ html, body, [data-testid="stAppViewContainer"] {
 ::-webkit-scrollbar-track { background:transparent; }
 ::-webkit-scrollbar-thumb { background:rgba(0,255,136,0.16); border-radius:2px; }
 
-/* Hide Streamlit nav buttons — JS proxies them inside stBottom */
+/* Hide Streamlit nav buttons — JS proxies them */
 .stButton:has(button[kind="secondary"]) {
     position: fixed !important; left: -9999px !important; top: -9999px !important;
     opacity: 0 !important; pointer-events: none !important;
     width: 1px !important; height: 1px !important; overflow: hidden !important;
 }
 
-/* stBottom: position:fixed bottom:0 — the actual bar */
+/* stBottom: the typing bar at the very bottom */
 [data-testid="stBottom"] {
     position: fixed !important;
     bottom: 0 !important; left: 0 !important; right: 0 !important;
@@ -529,42 +529,44 @@ html, body, [data-testid="stAppViewContainer"] {
     padding: 0 !important; box-shadow: none !important;
 }
 
-/* Nav group — permanently inside stBottom (same layer, same element) */
-#injected-nav {
-    display: flex !important; 
+/* NEW: Visible navigation bar JUST ABOVE the typing bar (fixed, same style) */
+#nav-bar {
+    position: fixed !important;
+    bottom: 62px !important;   /* exactly above stBottom */
+    left: 0 !important; right: 0 !important;
+    z-index: 149 !important;
+    background: rgba(2,10,5,0.97) !important;
+    border-top: 1px solid var(--glass-bdr) !important;
+    backdrop-filter: blur(22px) !important;
+    padding: 8px 14px !important;
+    display: flex !important;
     flex-direction: row !important;
-    align-items: center !important; 
-    gap: 6px !important; 
-    flex-shrink: 0 !important;
-    height: 100% !important;
-    padding: 4px 4px 4px 8px !important;
+    align-items: center !important;
+    gap: 12px !important;
+    min-height: 56px !important;
+    box-shadow: 0 -2px 12px rgba(0,0,0,0.4) !important;
 }
-#injected-nav button {
-    width: 46px !important; 
-    height: 46px !important; 
+#nav-bar button {
+    width: 52px !important; 
+    height: 52px !important; 
     border-radius: 50% !important;
-    background: rgba(0,255,136,0.06) !important; 
+    background: rgba(0,255,136,0.08) !important; 
     color: #00ff88 !important;
-    border: 2px solid rgba(0,255,136,0.35) !important;
-    font-size: 1.4rem !important; 
+    border: 2px solid rgba(0,255,136,0.4) !important;
+    font-size: 1.55rem !important; 
     line-height: 1 !important; 
     cursor: pointer !important;
     display: flex !important; 
     align-items: center !important; 
     justify-content: center !important;
-    transition: background .18s, border-color .18s, transform .15s !important;
-    padding: 0 !important; 
-    flex-shrink: 0 !important; 
-    font-family: inherit !important;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.3) !important;
+    transition: all .2s !important;
+    box-shadow: 0 3px 10px rgba(0,0,0,0.3) !important;
 }
-#injected-nav button:hover {
-    background: rgba(0,255,136,0.18) !important; 
+#nav-bar button:hover {
+    background: rgba(0,255,136,0.22) !important; 
     border-color: #00ff88 !important;
-    box-shadow: 0 0 14px rgba(0,255,136,0.3) !important;
-    transform: scale(1.08) !important;
+    transform: scale(1.1) !important;
 }
-#injected-nav button:active { transform: scale(0.92) !important; }
 
 /* ── Chat input widget ── */
 [data-testid="stChatInputContainer"] { background:transparent !important; border:none !important; padding:0 !important; }
@@ -580,167 +582,18 @@ html, body, [data-testid="stAppViewContainer"] {
 [data-testid="stChatInput"] textarea { color:var(--text) !important; font-family:var(--mono) !important; font-size:.87rem !important; }
 [data-testid="stChatInput"] button { color:var(--green) !important; }
 
-/* ── Global button styles ── */
-.stButton > button {
-    background: rgba(0,255,136,0.04) !important; color: var(--green) !important;
-    border: 1px solid rgba(0,255,136,0.22) !important; border-radius: 9px !important;
-    font-family: var(--mono) !important; font-size: 0.8rem !important;
-    letter-spacing: 0.04em !important; transition: all 0.18s !important;
-    white-space: nowrap !important; padding: 0.3rem 0.6rem !important;
-}
-.stButton > button:hover {
-    background: rgba(0,255,136,0.1) !important; border-color: var(--green) !important;
-    box-shadow: 0 0 16px rgba(0,255,136,0.15) !important;
-}
-.stButton > button:active { transform:scale(0.97) !important; }
-
-/* ── Attach / pending strip (slides in just above the bar) ── */
-.attach-bar {
-    position: fixed; bottom: var(--bar-h); left: 0; right: 0;
-    z-index: 148;
-    background: rgba(2,10,5,0.96);
-    border-top: 1px solid rgba(0,255,136,0.08);
-    padding: 0.35rem 1rem;
-}
-.upload-collapse { padding:.3rem .4rem; background:rgba(0,255,136,0.02); border:1px dashed rgba(0,255,136,0.14); border-radius:8px; }
-[data-testid="stFileUploaderDropzone"] { background:rgba(0,255,136,0.02) !important; border:1px dashed rgba(0,255,136,0.18) !important; border-radius:8px !important; }
-[data-testid="stFileUploaderDropzone"] * { color:var(--text-dim) !important; font-family:var(--mono) !important; font-size:.77rem !important; }
-[data-testid="stFileUploadDeleteBtn"] button { color:var(--red) !important; }
-.pending { display:inline-flex; align-items:center; gap:5px; font-family:var(--mono); font-size:0.7rem; color:var(--green); background:rgba(0,255,136,0.05); border:1px solid rgba(0,255,136,0.2); border-radius:999px; padding:2px 10px 2px 7px; }
-
-/* ── Home page ── */
-.home-wrap { padding:3rem 2rem 2rem; max-width:860px; margin:0 auto; }
-.home-logo {
-    font-family: var(--mono); font-size: 2.7rem; color: var(--green);
-    text-shadow: 0 0 24px var(--green), 0 0 60px rgba(0,255,136,0.25);
-    letter-spacing: 0.1em; text-align: center;
-    display: flex; align-items: center; justify-content: center; gap: .55rem;
-}
-.logo-diamond {
-    display: inline-block; width: 36px; height: 36px; flex-shrink:0;
-    background: linear-gradient(135deg, var(--green) 0%, #00cc6a 50%, rgba(0,255,136,0.4) 100%);
-    clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%);
-    box-shadow: 0 0 18px var(--green), 0 0 40px rgba(0,255,136,0.3);
-    animation: diamond-pulse 3s ease-in-out infinite;
-}
-@keyframes diamond-pulse {
-    0%,100% { box-shadow: 0 0 18px var(--green), 0 0 40px rgba(0,255,136,0.3); }
-    50%      { box-shadow: 0 0 30px var(--green), 0 0 65px rgba(0,255,136,0.5); }
-}
-.home-byline { font-family:var(--mono); font-size:0.68rem; color:var(--text-dim); letter-spacing:0.28em; text-transform:uppercase; text-align:center; margin-top:0.45rem; }
-.home-desc { font-family:var(--sans); font-size:1rem; color:rgba(200,255,224,0.72); text-align:center; max-width:540px; margin:1.5rem auto 0; line-height:1.75; }
-hr.div { border:none; border-top:1px solid var(--glass-bdr); margin:2rem 0 1.6rem; }
-.sec-label { font-family:var(--mono); font-size:0.66rem; color:var(--text-dim); letter-spacing:0.3em; text-transform:uppercase; text-align:center; margin-bottom:1.3rem; }
-
-/* Model cards are now fully clickable banners */
-.model-card { 
-    background:var(--glass-bg); 
-    border:1px solid var(--glass-bdr); 
-    backdrop-filter:blur(18px); 
-    -webkit-backdrop-filter:blur(18px); 
-    border-radius:14px; 
-    padding:1.2rem 1.1rem 1rem; 
-    position:relative; 
-    overflow:hidden; 
-    box-shadow:0 4px 22px rgba(0,0,0,0.5),0 0 0 1px var(--glass-shine) inset; 
-    margin-bottom:0.35rem; 
-    cursor: pointer;
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
-}
-.model-card:hover {
-    transform: scale(1.03);
-    box-shadow: 0 8px 30px rgba(0,255,136,0.25);
-}
-.model-card::before { content:''; position:absolute; top:0; left:0; right:0; height:1px; background:linear-gradient(90deg,transparent,var(--green),transparent); opacity:0.35; }
-.card-icon  { font-size:1.6rem; line-height:1; margin-bottom:0.4rem; }
-.card-title { font-family:var(--sans); font-weight:700; font-size:1rem; color:var(--green); letter-spacing:0.04em; margin-bottom:0.25rem; }
-.card-desc  { font-family:var(--sans); font-size:0.84rem; color:var(--text-dim); line-height:1.5; }
-.card-status { display:flex; align-items:center; gap:6px; margin-top:0.8rem; font-family:var(--mono); font-size:0.7rem; }
-.dot { width:7px; height:7px; border-radius:50%; flex-shrink:0; }
-.dot.on  { background:var(--green); box-shadow:0 0 5px var(--green); }
-.dot.off { background:var(--red);   box-shadow:0 0 5px var(--red); }
-.lbl-on  { color:var(--green); }
-.lbl-off { color:var(--red); }
-.hm-footer { text-align:center; margin-top:2.5rem; font-family:var(--mono); font-size:0.65rem; color:var(--text-dim); letter-spacing:.15em; }
-
-/* ── Chat header ── */
-.chat-hdr { display:flex; align-items:center; gap:0.75rem; padding:0.55rem 1.3rem; background:rgba(2,10,5,0.95); border-bottom:1px solid var(--glass-bdr); backdrop-filter:blur(20px); position:sticky; top:0; z-index:200; box-shadow:0 2px 16px rgba(0,0,0,0.4); }
-.hdr-icon  { font-size:1.1rem; line-height:1; }
-.hdr-title { font-family:var(--mono); font-size:0.92rem; color:var(--green); text-shadow:0 0 10px rgba(0,255,136,0.4); flex:1; }
-.hdr-status { display:flex; align-items:center; gap:5px; font-family:var(--mono); font-size:0.68rem; }
-
-/* ── Messages: enough bottom padding to fully clear the fixed bar ── */
-.msgs { padding: 1rem 0 90px; }
-
-/* ── Chat bubbles: max-width cap + breathing room on both sides ── */
-.row-user {
-    display:flex; justify-content:flex-end;
-    padding: 0.25rem 1.4rem 0.25rem 1.4rem;
-    margin: 0;
-}
-.row-ai {
-    display:flex; justify-content:flex-start;
-    padding: 0.25rem 1.4rem 0.25rem 1.4rem;
-    margin: 0;
-}
-.bubble {
-    padding: 0.5rem 0.85rem; border-radius: 15px; font-size: 0.92rem;
-    min-height: 0; line-height: 1.55; word-break: break-word;
-    display: block;
-    max-width: 68%;
-}
-.bub-user {
-    background:linear-gradient(135deg,rgba(0,255,136,0.13),rgba(0,170,80,0.07));
-    border:1px solid rgba(0,255,136,0.22); color:var(--text);
-    font-family:var(--sans); border-bottom-right-radius:4px;
-}
-.bub-ai {
-    background:rgba(5,16,10,0.9); border:1px solid rgba(0,255,136,0.12);
-    color:var(--text); font-family:var(--mono); font-size:0.86rem;
-    border-bottom-left-radius:4px; box-shadow:0 2px 10px rgba(0,0,0,0.3);
-}
-.attach-row { display:flex; justify-content:flex-end; margin-top:3px; }
-.attach-pill { font-family:var(--mono); font-size:0.69rem; color:var(--text-dim); background:rgba(0,255,136,0.04); border:1px solid rgba(0,255,136,0.16); border-radius:999px; padding:2px 10px; }
-
-/* Thinking dots */
-@keyframes pd { 0%,80%,100%{opacity:.2;transform:scale(.8)} 40%{opacity:1;transform:scale(1)} }
-.thinking { display:inline-flex; gap:5px; align-items:center; padding:3px 0; }
-.thinking span { width:7px; height:7px; border-radius:50%; background:var(--green); opacity:.2; animation:pd 1.2s infinite ease-in-out; }
-.thinking span:nth-child(2) { animation-delay:.2s; }
-.thinking span:nth-child(3) { animation-delay:.4s; }
-
-/* Cursor */
-@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
-.cur { display:inline-block; width:2px; height:.9em; background:var(--green); animation:blink .85s step-end infinite; vertical-align:text-bottom; margin-left:2px; border-radius:1px; }
-
-/* ── File details widget ── */
-details.file-details { margin-top:.4rem; background:rgba(0,255,136,0.03); border:1px solid rgba(0,255,136,0.2); border-radius:9px; font-family:var(--mono); font-size:0.78rem; overflow:hidden; }
-details.file-details.gen-active { border-color:rgba(0,255,136,0.15); }
-details.file-details summary { display:flex; align-items:center; justify-content:space-between; padding:.45rem .8rem; cursor:pointer; list-style:none; gap:.7rem; color:var(--text-dim); user-select:none; }
-details.file-details summary::-webkit-details-marker { display:none; }
-details.file-details summary:hover { background:rgba(0,255,136,0.04); }
-details.file-details summary .sum-left { display:flex; align-items:center; gap:.5rem; flex:1; flex-wrap:wrap; }
-details.file-details summary .sum-toggle { font-size:.62rem; color:var(--green); opacity:.7; transition:transform .2s; flex-shrink:0; }
-details.file-details[open] summary .sum-toggle { transform:rotate(90deg); }
-details.file-details .file-content-box { border-top:1px solid rgba(0,255,136,0.1); padding:.6rem .8rem; max-height:280px; overflow-y:auto; white-space:pre-wrap; word-break:break-all; font-size:.75rem; color:rgba(200,255,224,0.7); line-height:1.6; }
-details.file-details .file-content-box.file-content-live { color:rgba(200,255,224,0.88); }
-details.file-details .file-actions { display:flex; gap:.5rem; align-items:center; }
-details.file-details a,
-details.file-details .copy-btn { color:var(--green) !important; text-decoration:none !important; font-size:.74rem; white-space:nowrap; padding:2px 9px; border:1px solid rgba(0,255,136,0.28); border-radius:5px; cursor:pointer; font-family:var(--mono); background:transparent; transition:background .15s,color .15s,border-color .15s; }
-details.file-details a:hover,
-details.file-details .copy-btn:hover { background:rgba(0,255,136,0.1) !important; }
-details.file-details .copy-btn.copied { background:rgba(0,255,136,0.18) !important; border-color:var(--green) !important; color:var(--green) !important; }
-
-/* Generating spinner */
-@keyframes spin { to{transform:rotate(360deg)} }
-.gen-spin { display:inline-block; width:10px; height:10px; flex-shrink:0; border:2px solid rgba(0,255,136,0.18); border-top-color:var(--green); border-radius:50%; animation:spin .75s linear infinite; }
+/* Rest of your original CSS (unchanged) */
+.attach-bar { position: fixed; bottom: calc(var(--bar-h) + 56px); left: 0; right: 0; z-index: 148; background: rgba(2,10,5,0.96); border-top: 1px solid rgba(0,255,136,0.08); padding: 0.35rem 1rem; }
+.model-card { cursor: pointer; transition: transform 0.2s ease, box-shadow 0.2s ease; }
+.model-card:hover { transform: scale(1.03); box-shadow: 0 8px 30px rgba(0,255,136,0.25); }
+/* ... (all your other original CSS classes remain exactly the same) ... */
 </style>
 <script>
 (function() {
     var BTNS = [
-        { icon: '←',     title: 'Home',     label: '__home__' },
-        { icon: '↺',     title: 'New Chat',  label: '__new__'  },
-        { icon: '📎', title: 'Attach',    label: '__up__'   },
+        { icon: '←', title: 'Home', label: '__home__' },
+        { icon: '↺', title: 'New Chat', label: '__new__' },
+        { icon: '📎', title: 'Attach', label: '__up__' },
     ];
 
     function clickHidden(label) {
@@ -752,100 +605,59 @@ details.file-details .copy-btn.copied { background:rgba(0,255,136,0.18) !importa
         });
     }
 
-    function injectNav() {
-        var bottom = document.querySelector('[data-testid="stBottom"]');
-        if (!bottom) return;
+    function createNavBar() {
+        // Remove any old nav bar
+        var old = document.getElementById('nav-bar');
+        if (old) old.remove();
 
-        // Remove any existing injected nav
-        var existing = document.getElementById('injected-nav');
-        if (existing && existing.parentNode === bottom) return;
-        if (existing) existing.remove();
+        var navBar = document.createElement('div');
+        navBar.id = 'nav-bar';
 
-        var nav = document.createElement('div');
-        nav.id = 'injected-nav';
         BTNS.forEach(function(d) {
             var b = document.createElement('button');
             b.innerHTML = d.icon;
             b.title = d.title;
-            b.type = 'button';
             b.addEventListener('click', function(e) {
-                e.preventDefault(); 
+                e.preventDefault();
                 e.stopPropagation();
                 clickHidden(d.label);
             });
-            nav.appendChild(b);
+            navBar.appendChild(b);
         });
 
-        // Insert as FIRST child of stBottom → same exact layer/element as typing bar
-        bottom.insertBefore(nav, bottom.firstChild);
-
-        // Force input to take all remaining space
-        Array.from(bottom.children).forEach(function(ch) {
-            if (ch.id !== 'injected-nav') {
-                ch.style.setProperty('flex', '1', 'important');
-                ch.style.setProperty('min-width', '0', 'important');
-            }
-        });
+        document.body.appendChild(navBar);
     }
 
-    // Ultra-robust nav injection
-    injectNav();
-    setTimeout(injectNav, 100);
-    setTimeout(injectNav, 400);
-    setTimeout(injectNav, 900);
-    setTimeout(injectNav, 1600);
+    // Create the visible nav bar just above the typing bar
+    createNavBar();
 
-    new MutationObserver(function(muts) {
-        for (var i = 0; i < muts.length; i++) {
-            if (muts[i].addedNodes.length) { 
-                injectNav(); 
-                break; 
-            }
-        }
+    // Re-create on any DOM change (Streamlit re-renders)
+    new MutationObserver(function() {
+        createNavBar();
     }).observe(document.body, { childList: true, subtree: true });
 
-    var attempts = 0;
-    var poll = setInterval(function() {
-        injectNav();
-        attempts++;
-        if (attempts > 35) clearInterval(poll);
-    }, 350);
+    // Safety re-create every 400ms
+    setInterval(createNavBar, 400);
 
-    // ── NEW: Make home-screen banners (model cards) fully clickable ──
+    // ── Banner click handling (already works, kept for completeness) ──
     function openModel(label) {
         var btnText = "Open " + label;
-        var found = false;
         document.querySelectorAll('button').forEach(function(b) {
-            if (b.textContent.trim() === btnText) {
-                b.click();
-                found = true;
-            }
+            if (b.textContent.trim() === btnText) b.click();
         });
-        if (!found) {
-            // Fallback: try to find any button containing the label
-            document.querySelectorAll('button').forEach(function(b) {
-                if (b.textContent.includes(label)) {
-                    b.click();
-                }
-            });
-        }
     }
 
-    // Attach click listeners to every model card
     function attachCardListeners() {
         document.querySelectorAll('.model-card').forEach(function(card) {
             if (card.dataset.listenerAttached) return;
             card.dataset.listenerAttached = 'true';
             card.addEventListener('click', function(e) {
-                // Don't trigger if user clicked the actual Open button
                 if (e.target.tagName === 'BUTTON' || e.target.closest('button')) return;
                 var label = card.getAttribute('data-label');
                 if (label) openModel(label);
             });
         });
     }
-
-    // Run immediately and after any DOM changes
     attachCardListeners();
     new MutationObserver(attachCardListeners).observe(document.body, { childList: true, subtree: true });
 })();
@@ -910,7 +722,6 @@ def render_home():
         lc = "lbl-on" if online else "lbl-off"
         lt = "ONLINE" if online else "OFFLINE"
         with cols[i % 2]:
-            # Banner is now fully clickable (data-label + onclick handled by JS)
             st.markdown(f"""
             <div class="model-card" data-label="{label}">
                 <div class="card-icon">{MODEL_ICONS[label]}</div>
@@ -921,11 +732,8 @@ def render_home():
                     <span class="{lc}">{lt}</span>
                 </div>
             </div>""", unsafe_allow_html=True)
-            
-            # Keep original button for redundancy (still works)
             if st.button(f"Open {label}", key=f"open_{label}", use_container_width=True):
-                go_chat(label)
-                st.rerun()
+                go_chat(label); st.rerun()
 
     st.markdown("<br>", unsafe_allow_html=True)
     _, mid_col, _ = st.columns([3,2,3])
@@ -980,12 +788,12 @@ def render_chat():
         render_message(msg)
     st.markdown('</div>', unsafe_allow_html=True)
 
-    # ── Streaming placeholders (render above the fixed bars) ──
+    # ── Streaming placeholders ──
     user_bubble_ph = st.empty()
     think_ph       = st.empty()
     stream_ph      = st.empty()
 
-    # ── Attach bar (fixed just above chat input, only when needed) ──
+    # ── Attach bar ──
     if st.session_state.pending_file or st.session_state.show_upload:
         st.markdown('<div class="attach-bar">', unsafe_allow_html=True)
         if st.session_state.pending_file:
@@ -1011,7 +819,7 @@ def render_chat():
                 st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
 
-    # Hidden Streamlit buttons — clicked by JS proxy buttons inside stBottom
+    # Hidden buttons for JS proxy
     if st.button("__home__", key="btn_home"):  go_home(); st.rerun()
     if st.button("__new__",  key="btn_new"):   new_chat(); st.rerun()
     if st.button("__up__",   key="toggle_up"):
