@@ -499,7 +499,7 @@ html, body, [data-testid="stAppViewContainer"] {
 ::-webkit-scrollbar-track { background:transparent; }
 ::-webkit-scrollbar-thumb { background:rgba(0,255,136,0.16); border-radius:2px; }
 
-/* ── stBottom: full-width fixed bar ── */
+/* ── stBottom: fixed bottom bar, flex row, buttons injected by JS on left ── */
 [data-testid="stBottom"] {
     position: fixed !important;
     bottom: 0 !important; left: 0 !important; right: 0 !important;
@@ -509,54 +509,55 @@ html, body, [data-testid="stAppViewContainer"] {
     backdrop-filter: blur(22px) !important;
     -webkit-backdrop-filter: blur(22px) !important;
     box-shadow: 0 -4px 24px rgba(0,0,0,0.5) !important;
-    padding: 10px 14px 10px 148px !important;
+    padding: 8px 14px !important;
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    gap: 8px !important;
     min-height: 62px !important;
     box-sizing: border-box !important;
 }
+/* Chat input wrapper fills remaining space */
 [data-testid="stBottom"] > div {
+    flex: 1 !important;
+    min-width: 0 !important;
     background: transparent !important;
     border: none !important;
     padding: 0 !important;
     box-shadow: none !important;
 }
-
-/* ── Proxy nav bar: pure HTML injected by JS into stBottom ── */
-#proxy-nav-bar {
-    position: fixed !important;
-    bottom: 0 !important; left: 0 !important;
-    width: 140px !important; min-height: 62px !important;
-    z-index: 155 !important;
-    background: rgba(2,10,5,0.97) !important;
-    border-top: 1px solid var(--glass-bdr) !important;
-    backdrop-filter: blur(22px) !important;
+/* The injected nav group inside stBottom */
+#injected-nav {
     display: flex !important;
     flex-direction: row !important;
     align-items: center !important;
-    justify-content: center !important;
     gap: 6px !important;
-    padding: 0 8px !important;
+    flex-shrink: 0 !important;
 }
-#proxy-nav-bar button {
-    width: 40px !important; height: 40px !important;
+#injected-nav button {
+    width: 40px !important;
+    height: 40px !important;
     border-radius: 50% !important;
     background: rgba(0,255,136,0.04) !important;
-    color: var(--green) !important;
+    color: #00ff88 !important;
     border: 1px solid rgba(0,255,136,0.22) !important;
-    font-size: 1.1rem !important;
+    font-size: 1.15rem !important;
+    line-height: 1 !important;
     cursor: pointer !important;
-    display: flex !important; align-items: center !important; justify-content: center !important;
-    transition: background 0.18s, border-color 0.18s !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    flex-shrink: 0 !important;
+    transition: background 0.18s, border-color 0.18s, box-shadow 0.18s !important;
+    padding: 0 !important;
     font-family: inherit !important;
 }
-#proxy-nav-bar button:hover {
-    background: rgba(0,255,136,0.1) !important;
-    border-color: var(--green) !important;
-    box-shadow: 0 0 16px rgba(0,255,136,0.15) !important;
+#injected-nav button:hover {
+    background: rgba(0,255,136,0.12) !important;
+    border-color: #00ff88 !important;
+    box-shadow: 0 0 14px rgba(0,255,136,0.2) !important;
 }
-#proxy-nav-bar button:active { transform: scale(0.95) !important; }
-
-/* Hide the actual Streamlit buttons completely from layout */
-#nav-btn-row { display: none !important; }
+#injected-nav button:active { transform: scale(0.94) !important; }
 
 /* ── Chat input widget ── */
 [data-testid="stChatInputContainer"] { background:transparent !important; border:none !important; padding:0 !important; }
@@ -710,48 +711,69 @@ details.file-details .copy-btn.copied { background:rgba(0,255,136,0.18) !importa
 </style>
 <script>
 (function() {
-    // Create a fixed proxy nav bar with real HTML buttons.
-    // Each proxy button clicks the corresponding hidden Streamlit button.
-    function injectProxyNav() {
-        if (document.getElementById('proxy-nav-bar')) return;
+    var BTNS = [
+        { icon: '\u2190',      title: 'Home',        key: 'btn_home' },
+        { icon: '\u21ba',      title: 'New Chat',     key: 'btn_new'  },
+        { icon: '\U0001f4ce',  title: 'Attach File',  key: 'toggle_up' },
+    ];
 
-        var bar = document.createElement('div');
-        bar.id = 'proxy-nav-bar';
-
-        var defs = [
-            { label: '\u2190', title: 'Home',      key: 'btn_home' },
-            { label: '\u21ba', title: 'New Chat',   key: 'btn_new' },
-            { label: '\U0001f4ce', title: 'Attach', key: 'toggle_up' },
-        ];
-
-        defs.forEach(function(d) {
-            var btn = document.createElement('button');
-            btn.textContent = d.label;
-            btn.title = d.title;
-            btn.addEventListener('click', function() {
-                // Find the Streamlit button by its data-testid key attribute
-                // Streamlit sets aria-label or we can find by text content
-                var all = document.querySelectorAll('[data-testid="stBottom"] ~ * button, #nav-btn-row button, .stButton button');
-                // Search all buttons for matching text
-                var target = null;
-                document.querySelectorAll('.stButton > button').forEach(function(b) {
-                    if (b.textContent.trim() === d.label) target = b;
-                });
-                if (target) { target.click(); return; }
-                // Fallback: match by key via parent element id
-                var wrap = document.querySelector('[data-testid="element-container"]:has(button)');
-                if (wrap) wrap.querySelector('button').click();
-            });
-            bar.appendChild(btn);
+    function clickHidden(key) {
+        // Streamlit renders button text as the label we passed — "home", "new", "up"
+        var map = { btn_home: 'home', btn_new: 'new', toggle_up: 'up' };
+        var label = map[key];
+        var found = null;
+        document.querySelectorAll('button').forEach(function(b) {
+            if (b.textContent.trim() === label) found = b;
         });
-
-        document.body.appendChild(bar);
+        if (found) found.click();
     }
 
-    // Inject immediately and re-check after Streamlit renders
-    injectProxyNav();
-    new MutationObserver(function() { injectProxyNav(); })
-        .observe(document.body, { childList: true, subtree: true });
+    function inject() {
+        var bottom = document.querySelector('[data-testid="stBottom"]');
+        if (!bottom) return;
+
+        // Already injected and still there
+        if (document.getElementById('injected-nav') &&
+            document.getElementById('injected-nav').parentNode === bottom) return;
+
+        // Remove stale one if parent changed
+        var old = document.getElementById('injected-nav');
+        if (old) old.remove();
+
+        // Build the nav group
+        var nav = document.createElement('div');
+        nav.id = 'injected-nav';
+
+        BTNS.forEach(function(d) {
+            var b = document.createElement('button');
+            b.textContent = d.icon;
+            b.title = d.title;
+            b.addEventListener('click', function(e) {
+                e.preventDefault();
+                clickHidden(d.key);
+            });
+            nav.appendChild(b);
+        });
+
+        // Insert as FIRST child of stBottom (before the chat input div)
+        bottom.insertBefore(nav, bottom.firstChild);
+
+        // Ensure the chat input sibling grows to fill remaining space
+        var inp = bottom.querySelector('[data-testid="stChatInputContainer"]');
+        if (!inp) inp = bottom.children[bottom.children.length - 1];
+        if (inp && inp !== nav) {
+            inp.style.flex = '1';
+            inp.style.minWidth = '0';
+        }
+    }
+
+    // Run on load and after every Streamlit re-render
+    inject();
+    new MutationObserver(function(muts) {
+        for (var i = 0; i < muts.length; i++) {
+            if (muts[i].addedNodes.length) { inject(); break; }
+        }
+    }).observe(document.body, { childList: true, subtree: true });
 })();
 </script>
 """
@@ -911,12 +933,11 @@ def render_chat():
                 st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
 
-    # ── Hidden Streamlit buttons (zero height, invisible) ──────────────────────
-    # Pure HTML proxy buttons in the fixed bar will click these via JS.
-    st.markdown('<div id="nav-btn-row" style="position:absolute;width:1px;height:1px;overflow:hidden;opacity:0;pointer-events:none;">', unsafe_allow_html=True)
-    if st.button("\u2190", key="btn_home"):  go_home(); st.rerun()
-    if st.button("\u21ba", key="btn_new"):   new_chat(); st.rerun()
-    if st.button("\U0001f4ce", key="toggle_up"):
+    # ── Hidden Streamlit buttons — JS proxy buttons in stBottom will click these ──
+    st.markdown('<div id="st-nav-btns" style="display:none">', unsafe_allow_html=True)
+    if st.button("home", key="btn_home"):  go_home(); st.rerun()
+    if st.button("new",  key="btn_new"):   new_chat(); st.rerun()
+    if st.button("up",   key="toggle_up"):
         st.session_state.show_upload = not st.session_state.show_upload; st.rerun()
     st.markdown('</div>', unsafe_allow_html=True)
 
