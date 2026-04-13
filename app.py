@@ -529,25 +529,42 @@ html, body, [data-testid="stAppViewContainer"] {
     padding: 0 !important; box-shadow: none !important;
 }
 
-/* Nav group JS-injected directly inside stBottom */
+/* Nav group — permanently inside stBottom (same layer, same element) */
 #injected-nav {
-    display: flex !important; flex-direction: row !important;
-    align-items: center !important; gap: 6px !important; flex-shrink: 0 !important;
+    display: flex !important; 
+    flex-direction: row !important;
+    align-items: center !important; 
+    gap: 6px !important; 
+    flex-shrink: 0 !important;
+    height: 100% !important;
+    padding: 4px 4px 4px 8px !important;
 }
 #injected-nav button {
-    width: 40px !important; height: 40px !important; border-radius: 50% !important;
-    background: rgba(0,255,136,0.04) !important; color: #00ff88 !important;
-    border: 1px solid rgba(0,255,136,0.22) !important;
-    font-size: 1.15rem !important; line-height: 1 !important; cursor: pointer !important;
-    display: flex !important; align-items: center !important; justify-content: center !important;
-    transition: background .18s, border-color .18s !important;
-    padding: 0 !important; flex-shrink: 0 !important; font-family: inherit !important;
+    width: 46px !important; 
+    height: 46px !important; 
+    border-radius: 50% !important;
+    background: rgba(0,255,136,0.06) !important; 
+    color: #00ff88 !important;
+    border: 2px solid rgba(0,255,136,0.35) !important;
+    font-size: 1.4rem !important; 
+    line-height: 1 !important; 
+    cursor: pointer !important;
+    display: flex !important; 
+    align-items: center !important; 
+    justify-content: center !important;
+    transition: background .18s, border-color .18s, transform .15s !important;
+    padding: 0 !important; 
+    flex-shrink: 0 !important; 
+    font-family: inherit !important;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3) !important;
 }
 #injected-nav button:hover {
-    background: rgba(0,255,136,0.12) !important; border-color: #00ff88 !important;
-    box-shadow: 0 0 14px rgba(0,255,136,0.2) !important;
+    background: rgba(0,255,136,0.18) !important; 
+    border-color: #00ff88 !important;
+    box-shadow: 0 0 14px rgba(0,255,136,0.3) !important;
+    transform: scale(1.08) !important;
 }
-#injected-nav button:active { transform: scale(0.94) !important; }
+#injected-nav button:active { transform: scale(0.92) !important; }
 
 /* ── Chat input widget ── */
 [data-testid="stChatInputContainer"] { background:transparent !important; border:none !important; padding:0 !important; }
@@ -614,7 +631,26 @@ html, body, [data-testid="stAppViewContainer"] {
 .home-desc { font-family:var(--sans); font-size:1rem; color:rgba(200,255,224,0.72); text-align:center; max-width:540px; margin:1.5rem auto 0; line-height:1.75; }
 hr.div { border:none; border-top:1px solid var(--glass-bdr); margin:2rem 0 1.6rem; }
 .sec-label { font-family:var(--mono); font-size:0.66rem; color:var(--text-dim); letter-spacing:0.3em; text-transform:uppercase; text-align:center; margin-bottom:1.3rem; }
-.model-card { background:var(--glass-bg); border:1px solid var(--glass-bdr); backdrop-filter:blur(18px); -webkit-backdrop-filter:blur(18px); border-radius:14px; padding:1.2rem 1.1rem 1rem; position:relative; overflow:hidden; box-shadow:0 4px 22px rgba(0,0,0,0.5),0 0 0 1px var(--glass-shine) inset; margin-bottom:0.35rem; }
+
+/* Model cards are now fully clickable banners */
+.model-card { 
+    background:var(--glass-bg); 
+    border:1px solid var(--glass-bdr); 
+    backdrop-filter:blur(18px); 
+    -webkit-backdrop-filter:blur(18px); 
+    border-radius:14px; 
+    padding:1.2rem 1.1rem 1rem; 
+    position:relative; 
+    overflow:hidden; 
+    box-shadow:0 4px 22px rgba(0,0,0,0.5),0 0 0 1px var(--glass-shine) inset; 
+    margin-bottom:0.35rem; 
+    cursor: pointer;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.model-card:hover {
+    transform: scale(1.03);
+    box-shadow: 0 8px 30px rgba(0,255,136,0.25);
+}
 .model-card::before { content:''; position:absolute; top:0; left:0; right:0; height:1px; background:linear-gradient(90deg,transparent,var(--green),transparent); opacity:0.35; }
 .card-icon  { font-size:1.6rem; line-height:1; margin-bottom:0.4rem; }
 .card-title { font-family:var(--sans); font-weight:700; font-size:1rem; color:var(--green); letter-spacing:0.04em; margin-bottom:0.25rem; }
@@ -716,9 +752,11 @@ details.file-details .copy-btn.copied { background:rgba(0,255,136,0.18) !importa
         });
     }
 
-    function inject() {
+    function injectNav() {
         var bottom = document.querySelector('[data-testid="stBottom"]');
         if (!bottom) return;
+
+        // Remove any existing injected nav
         var existing = document.getElementById('injected-nav');
         if (existing && existing.parentNode === bottom) return;
         if (existing) existing.remove();
@@ -727,32 +765,89 @@ details.file-details .copy-btn.copied { background:rgba(0,255,136,0.18) !importa
         nav.id = 'injected-nav';
         BTNS.forEach(function(d) {
             var b = document.createElement('button');
-            b.textContent = d.icon;
+            b.innerHTML = d.icon;
             b.title = d.title;
             b.type = 'button';
             b.addEventListener('click', function(e) {
-                e.preventDefault(); e.stopPropagation();
+                e.preventDefault(); 
+                e.stopPropagation();
                 clickHidden(d.label);
             });
             nav.appendChild(b);
         });
 
+        // Insert as FIRST child of stBottom → same exact layer/element as typing bar
         bottom.insertBefore(nav, bottom.firstChild);
 
+        // Force input to take all remaining space
         Array.from(bottom.children).forEach(function(ch) {
             if (ch.id !== 'injected-nav') {
-                ch.style.flex = '1';
-                ch.style.minWidth = '0';
+                ch.style.setProperty('flex', '1', 'important');
+                ch.style.setProperty('min-width', '0', 'important');
             }
         });
     }
 
-    inject();
+    // Ultra-robust nav injection
+    injectNav();
+    setTimeout(injectNav, 100);
+    setTimeout(injectNav, 400);
+    setTimeout(injectNav, 900);
+    setTimeout(injectNav, 1600);
+
     new MutationObserver(function(muts) {
         for (var i = 0; i < muts.length; i++) {
-            if (muts[i].addedNodes.length) { inject(); break; }
+            if (muts[i].addedNodes.length) { 
+                injectNav(); 
+                break; 
+            }
         }
     }).observe(document.body, { childList: true, subtree: true });
+
+    var attempts = 0;
+    var poll = setInterval(function() {
+        injectNav();
+        attempts++;
+        if (attempts > 35) clearInterval(poll);
+    }, 350);
+
+    // ── NEW: Make home-screen banners (model cards) fully clickable ──
+    function openModel(label) {
+        var btnText = "Open " + label;
+        var found = false;
+        document.querySelectorAll('button').forEach(function(b) {
+            if (b.textContent.trim() === btnText) {
+                b.click();
+                found = true;
+            }
+        });
+        if (!found) {
+            // Fallback: try to find any button containing the label
+            document.querySelectorAll('button').forEach(function(b) {
+                if (b.textContent.includes(label)) {
+                    b.click();
+                }
+            });
+        }
+    }
+
+    // Attach click listeners to every model card
+    function attachCardListeners() {
+        document.querySelectorAll('.model-card').forEach(function(card) {
+            if (card.dataset.listenerAttached) return;
+            card.dataset.listenerAttached = 'true';
+            card.addEventListener('click', function(e) {
+                // Don't trigger if user clicked the actual Open button
+                if (e.target.tagName === 'BUTTON' || e.target.closest('button')) return;
+                var label = card.getAttribute('data-label');
+                if (label) openModel(label);
+            });
+        });
+    }
+
+    // Run immediately and after any DOM changes
+    attachCardListeners();
+    new MutationObserver(attachCardListeners).observe(document.body, { childList: true, subtree: true });
 })();
 </script>
 """
@@ -815,8 +910,9 @@ def render_home():
         lc = "lbl-on" if online else "lbl-off"
         lt = "ONLINE" if online else "OFFLINE"
         with cols[i % 2]:
+            # Banner is now fully clickable (data-label + onclick handled by JS)
             st.markdown(f"""
-            <div class="model-card">
+            <div class="model-card" data-label="{label}">
                 <div class="card-icon">{MODEL_ICONS[label]}</div>
                 <div class="card-title">{label}</div>
                 <div class="card-desc">{MODEL_DESC[label]}</div>
@@ -825,8 +921,11 @@ def render_home():
                     <span class="{lc}">{lt}</span>
                 </div>
             </div>""", unsafe_allow_html=True)
+            
+            # Keep original button for redundancy (still works)
             if st.button(f"Open {label}", key=f"open_{label}", use_container_width=True):
-                go_chat(label); st.rerun()
+                go_chat(label)
+                st.rerun()
 
     st.markdown("<br>", unsafe_allow_html=True)
     _, mid_col, _ = st.columns([3,2,3])
