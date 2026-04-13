@@ -34,6 +34,73 @@ MODEL_DESC = {
     "Student Chatbot":       "A guided learning assistant that helps students understand concepts.",
 }
 
+# ── Web search helper ────────────────────────────────────────────────────────
+
+def web_search(query: str, num_results: int = 5) -> str:
+    """Perform a DuckDuckGo search and return formatted results."""
+    try:
+        encoded = requests.utils.quote(query)
+        headers = {
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/120.0.0.0 Safari/537.36"
+            )
+        }
+        # DuckDuckGo instant answer API
+        url = f"https://api.duckduckgo.com/?q={encoded}&format=json&no_html=1&skip_disambig=1"
+        r = requests.get(url, headers=headers, timeout=8)
+        data = r.json()
+
+        results = []
+
+        # Abstract (main summary)
+        if data.get("AbstractText"):
+            results.append(f"Summary: {data['AbstractText']}")
+            if data.get("AbstractURL"):
+                results.append(f"Source: {data['AbstractURL']}")
+
+        # Related topics
+        for topic in data.get("RelatedTopics", [])[:num_results]:
+            if isinstance(topic, dict) and topic.get("Text"):
+                results.append(f"- {topic['Text']}")
+                if topic.get("FirstURL"):
+                    results.append(f"  URL: {topic['FirstURL']}")
+
+        # Answer (e.g. calculations, direct answers)
+        if data.get("Answer"):
+            results.insert(0, f"Direct Answer: {data['Answer']}")
+
+        if results:
+            return "\n".join(results)
+
+        # Fallback: HTML scrape of DuckDuckGo
+        html_url = f"https://html.duckduckgo.com/html/?q={encoded}"
+        r2 = requests.get(html_url, headers=headers, timeout=8)
+        snippets = re.findall(
+            r'class="result__snippet"[^>]*>(.*?)</a>',
+            r2.text, re.DOTALL
+        )[:num_results]
+        titles = re.findall(
+            r'class="result__a"[^>]*>(.*?)</a>',
+            r2.text, re.DOTALL
+        )[:num_results]
+        if snippets:
+            out = []
+            for i, snip in enumerate(snippets):
+                clean = re.sub(r'<[^>]+>', '', snip).strip()
+                title = re.sub(r'<[^>]+>', '', titles[i]).strip() if i < len(titles) else ""
+                if title:
+                    out.append(f"{i+1}. {title}: {clean}")
+                else:
+                    out.append(f"{i+1}. {clean}")
+            return "\n".join(out)
+
+        return "No results found for this query."
+    except Exception as e:
+        return f"Search error: {e}"
+
+
 TEXT_EXTENSIONS = {
     ".txt",".js",".ts",".jsx",".tsx",".html",".htm",".css",
     ".py",".java",".c",".cpp",".h",".cs",".go",".rb",".php",
@@ -164,6 +231,8 @@ def _strip_tags(s: str) -> str:
     s = re.sub(r'\[/?input-[^\]]+\]', '', s)
     s = re.sub(r'\[output-file-[^\]]+\]', '', s)
     s = re.sub(r'\[/output-file-[^\]]+\]', '', s)
+    s = re.sub(r'\[output-search\][^\[]*\[/output-search\]', '', s)
+    s = re.sub(r'\[output-search\][^\[]*$', '', s)
     s = re.sub(r'\n{3,}', '\n\n', s)
     return s.strip()
 
@@ -498,12 +567,7 @@ html, body, [data-testid="stAppViewContainer"] {
 ::-webkit-scrollbar-track { background:transparent; }
 ::-webkit-scrollbar-thumb { background:rgba(0,255,136,0.16); border-radius:2px; }
 
-/* Hide Streamlit nav buttons — JS proxies them inside stBottom */
-.stButton:has(button[kind="secondary"]) {
-    position: fixed !important; left: -9999px !important; top: -9999px !important;
-    opacity: 0 !important; pointer-events: none !important;
-    width: 1px !important; height: 1px !important; overflow: hidden !important;
-}
+/* Proxy nav buttons (hidden, JS-triggered): hidden via JS itself */
 
 /* stBottom: position:fixed bottom:0 — the actual bar */
 [data-testid="stBottom"] {
@@ -701,11 +765,24 @@ details.file-details .copy-btn.copied { background:rgba(0,255,136,0.18) !importa
 </style>
 <script>
 (function() {
+    var PROXY_LABELS = ['__home__', '__new__', '__up__'];
     var BTNS = [
-        { icon: '←',     title: 'Home',     label: '__home__' },
-        { icon: '↺',     title: 'New Chat',  label: '__new__'  },
-        { icon: '📎', title: 'Attach',    label: '__up__'   },
+        { icon: '\u2190', title: 'Home',     label: '__home__' },
+        { icon: '\u21ba', title: 'New Chat',  label: '__new__'  },
+        { icon: '\ud83d\udcce', title: 'Attach', label: '__up__' },
     ];
+
+    // Hide proxy Streamlit buttons (they're only needed as click targets)
+    function hideProxyBtns() {
+        document.querySelectorAll('button').forEach(function(b) {
+            if (PROXY_LABELS.indexOf(b.textContent.trim()) !== -1) {
+                var wrap = b.closest('[data-testid="column"]') || b.closest('.stButton') || b.parentElement;
+                if (wrap) {
+                    wrap.style.cssText = 'position:fixed!important;left:-9999px!important;top:-9999px!important;width:1px!important;height:1px!important;overflow:hidden!important;opacity:0!important;pointer-events:none!important';
+                }
+            }
+        });
+    }
 
     function clickHidden(label) {
         document.querySelectorAll('button').forEach(function(b) {
@@ -747,10 +824,11 @@ details.file-details .copy-btn.copied { background:rgba(0,255,136,0.18) !importa
         });
     }
 
-    inject();
+    function tick() { inject(); hideProxyBtns(); }
+    tick();
     new MutationObserver(function(muts) {
         for (var i = 0; i < muts.length; i++) {
-            if (muts[i].addedNodes.length) { inject(); break; }
+            if (muts[i].addedNodes.length) { tick(); break; }
         }
     }).observe(document.body, { childList: true, subtree: true });
 })();
@@ -941,32 +1019,69 @@ def render_chat():
         user_bubble_ph.markdown(_user_bubble_html(user_input, file_att), unsafe_allow_html=True)
         think_ph.markdown(_thinking_html(), unsafe_allow_html=True)
 
-        raw_response = ""
-        started      = False
+        # ── Search loop: keep streaming until no [output-search] remains ──
+        MAX_SEARCH_ROUNDS = 5
+        search_round      = 0
+        raw_response      = ""
 
-        try:
-            for token in stream_chat(model_id, ollama_msgs):
-                raw_response += token
-                if not started:
-                    think_ph.empty()
-                    started = True
-                inner = build_streaming_html(raw_response)
+        while search_round <= MAX_SEARCH_ROUNDS:
+            raw_response = ""
+            started      = False
+
+            try:
+                for token in stream_chat(model_id, ollama_msgs):
+                    raw_response += token
+                    if not started:
+                        think_ph.empty()
+                        started = True
+                    # While streaming, mask [output-search] blocks from display
+                    display_raw = re.sub(
+                        r'\[output-search\].*?\[/output-search\]', '',
+                        raw_response, flags=re.DOTALL
+                    )
+                    display_raw = re.sub(r'\[output-search\][^\[]*$', '', display_raw)
+                    inner = build_streaming_html(display_raw)
+                    stream_ph.markdown(
+                        f'<div class="row-ai"><div class="bubble bub-ai">{inner}</div></div>',
+                        unsafe_allow_html=True,
+                    )
+            except Exception as e:
+                think_ph.empty()
+                raw_response = f"[Connection error: {e}]"
+                err_html = html_lib.escape(raw_response)
                 stream_ph.markdown(
-                    f'<div class="row-ai"><div class="bubble bub-ai">{inner}</div></div>',
+                    f'<div class="row-ai"><div class="bubble bub-ai">{err_html}</div></div>',
                     unsafe_allow_html=True,
                 )
-        except Exception as e:
-            think_ph.empty()
-            raw_response = f"[Connection error: {e}]"
-            err_html = html_lib.escape(raw_response)
-            stream_ph.markdown(
-                f'<div class="row-ai"><div class="bubble bub-ai">{err_html}</div></div>',
-                unsafe_allow_html=True,
-            )
-            st.session_state.messages.append({"role":"assistant","content":raw_response,"segments":[{"type":"text","content":raw_response}]})
-            return
+                st.session_state.messages.append({"role":"assistant","content":raw_response,"segments":[{"type":"text","content":raw_response}]})
+                return
 
-        think_ph.empty()
+            think_ph.empty()
+
+            # Check for [output-search] tag in the completed response
+            search_pat = re.compile(r'\[output-search\](.*?)\[/output-search\]', re.DOTALL)
+            search_matches = search_pat.findall(raw_response)
+
+            if not search_matches or search_round >= MAX_SEARCH_ROUNDS:
+                break  # Done — no more searches needed
+
+            # Perform all searches and inject results
+            search_results_block = ""
+            for query in search_matches:
+                query = query.strip()
+                stream_ph.markdown(
+                    f'<div class="row-ai"><div class="bubble bub-ai" style="opacity:.6;font-size:.8rem">'
+                    f'🔍 Searching: <em>{html_lib.escape(query)}</em>…</div></div>',
+                    unsafe_allow_html=True,
+                )
+                results = web_search(query)
+                search_results_block += f"[input-search]\nQuery: {query}\n{results}\n[/input-search]\n"
+
+            # Append assistant turn + search results to conversation, then continue
+            ollama_msgs.append({"role": "assistant", "content": raw_response})
+            ollama_msgs.append({"role": "user",      "content": search_results_block})
+            think_ph.markdown(_thinking_html(), unsafe_allow_html=True)
+            search_round += 1
 
         segs  = parse_output(raw_response)
         inner = _segments_to_html(segs)
