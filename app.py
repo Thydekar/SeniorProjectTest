@@ -521,12 +521,16 @@ html, body, [data-testid="stAppViewContainer"] {
    ignores custom div wrappers around its own components.               ── */
 #nav-anchor + [data-testid="stHorizontalBlock"] {
     position: fixed !important;
-    bottom: 10px !important;
+    bottom: 11px !important;
     left: 8px !important;
     z-index: 300 !important;
-    width: auto !important;
+    width: 110px !important;
     gap: 5px !important;
     flex-wrap: nowrap !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    display: flex !important;
+    align-items: center !important;
 }
 #nav-anchor + [data-testid="stHorizontalBlock"] [data-testid="stColumn"] {
     width: auto !important;
@@ -534,8 +538,10 @@ html, body, [data-testid="stAppViewContainer"] {
     min-width: 0 !important;
     padding: 0 !important;
 }
-#nav-anchor + [data-testid="stHorizontalBlock"] [data-testid="stColumn"] > div {
+#nav-anchor + [data-testid="stHorizontalBlock"] [data-testid="stColumn"] > div,
+#nav-anchor + [data-testid="stHorizontalBlock"] [data-testid="stColumn"] > div > div {
     margin: 0 !important;
+    padding: 0 !important;
 }
 #nav-anchor + [data-testid="stHorizontalBlock"] .stButton > button {
     width: 40px !important;
@@ -915,6 +921,13 @@ def render_chat():
         except Exception as e:
             think_ph.empty()
             raw_response = f"[Connection error: {e}]"
+            err_html = html_lib.escape(raw_response)
+            stream_ph.markdown(
+                f'<div class="row-ai"><div class="bubble bub-ai">{err_html}</div></div>',
+                unsafe_allow_html=True,
+            )
+            st.session_state.messages.append({"role":"assistant","content":raw_response,"segments":[{"type":"text","content":raw_response}]})
+            return
 
         think_ph.empty()
 
