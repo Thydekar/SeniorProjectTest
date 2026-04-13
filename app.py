@@ -174,8 +174,9 @@ def _strip_partial_tag(s: str) -> str:
 
 
 def safe_html(text: str) -> str:
-    # Collapse newlines to spaces so user bubbles never stack characters vertically
-    cleaned = str(text).strip().replace("\r\n", " ").replace("\r", " ").replace("\n", " ")
+    cleaned = str(text).strip()
+    cleaned = re.sub(r'[\r\n\t]+', ' ', cleaned)
+    cleaned = re.sub(r' {2,}', ' ', cleaned)
     return html_lib.escape(cleaned)
 
 
@@ -232,10 +233,10 @@ def _user_bubble_html(content: str, file_att) -> str:
             f'</div>'
         )
     return (
-        f'<div class="row-user"><div>'
+        f'<div class="row-user">'
         f'<div class="bubble bub-user">{txt}</div>'
         f'{file_htm}'
-        f'</div></div>'
+        f'</div>'
     )
 
 
@@ -498,7 +499,7 @@ html, body, [data-testid="stAppViewContainer"] {
 ::-webkit-scrollbar-track { background:transparent; }
 ::-webkit-scrollbar-thumb { background:rgba(0,255,136,0.16); border-radius:2px; }
 
-/* ── stBottom: full-width fixed bottom bar containing the chat input ── */
+/* ── stBottom: full-width fixed bar ── */
 [data-testid="stBottom"] {
     position: fixed !important;
     bottom: 0 !important; left: 0 !important; right: 0 !important;
@@ -508,58 +509,54 @@ html, body, [data-testid="stAppViewContainer"] {
     backdrop-filter: blur(22px) !important;
     -webkit-backdrop-filter: blur(22px) !important;
     box-shadow: 0 -4px 24px rgba(0,0,0,0.5) !important;
-    padding: 10px 14px 10px 148px !important;  /* left padding leaves room for the 3 buttons */
+    padding: 10px 14px 10px 148px !important;
     min-height: 62px !important;
+    box-sizing: border-box !important;
+}
+[data-testid="stBottom"] > div {
+    background: transparent !important;
+    border: none !important;
+    padding: 0 !important;
+    box-shadow: none !important;
 }
 
-/* ── Nav button container: CSS-fixed to bottom-left, same height as stBottom ── */
-[data-testid="stVerticalBlock"]:has(#nav-btn-anchor) {
+/* ── Proxy nav bar: pure HTML injected by JS into stBottom ── */
+#proxy-nav-bar {
     position: fixed !important;
-    bottom: 0 !important;
-    left: 0 !important;
-    width: 140px !important;
-    min-height: 62px !important;
-    z-index: 151 !important;
+    bottom: 0 !important; left: 0 !important;
+    width: 140px !important; min-height: 62px !important;
+    z-index: 155 !important;
     background: rgba(2,10,5,0.97) !important;
     border-top: 1px solid var(--glass-bdr) !important;
     backdrop-filter: blur(22px) !important;
-    -webkit-backdrop-filter: blur(22px) !important;
-    display: flex !important;
-    flex-direction: column !important;
-    justify-content: center !important;
-    padding: 0 6px !important;
-    margin: 0 !important;
-}
-/* Hide the span anchor itself */
-[data-testid="stVerticalBlock"]:has(#nav-btn-anchor) #nav-btn-anchor { display: none !important; }
-/* The columns row inside the nav container */
-[data-testid="stVerticalBlock"]:has(#nav-btn-anchor) [data-testid="stHorizontalBlock"] {
     display: flex !important;
     flex-direction: row !important;
     align-items: center !important;
     justify-content: center !important;
-    gap: 4px !important;
-    width: 100% !important;
-    margin: 0 !important;
-    padding: 0 !important;
+    gap: 6px !important;
+    padding: 0 8px !important;
 }
-[data-testid="stVerticalBlock"]:has(#nav-btn-anchor) [data-testid="stColumn"] {
-    flex: 0 0 40px !important;
-    width: 40px !important;
-    min-width: 40px !important;
-    max-width: 40px !important;
-    padding: 0 !important;
-}
-[data-testid="stVerticalBlock"]:has(#nav-btn-anchor) [data-testid="stColumn"] > div {
-    margin: 0 !important; padding: 0 !important;
-}
-[data-testid="stVerticalBlock"]:has(#nav-btn-anchor) .stButton > button {
+#proxy-nav-bar button {
     width: 40px !important; height: 40px !important;
-    padding: 0 !important; border-radius: 50% !important;
-    font-size: 1.1rem !important; line-height: 1 !important;
-    display: flex !important; align-items: center !important;
-    justify-content: center !important;
+    border-radius: 50% !important;
+    background: rgba(0,255,136,0.04) !important;
+    color: var(--green) !important;
+    border: 1px solid rgba(0,255,136,0.22) !important;
+    font-size: 1.1rem !important;
+    cursor: pointer !important;
+    display: flex !important; align-items: center !important; justify-content: center !important;
+    transition: background 0.18s, border-color 0.18s !important;
+    font-family: inherit !important;
 }
+#proxy-nav-bar button:hover {
+    background: rgba(0,255,136,0.1) !important;
+    border-color: var(--green) !important;
+    box-shadow: 0 0 16px rgba(0,255,136,0.15) !important;
+}
+#proxy-nav-bar button:active { transform: scale(0.95) !important; }
+
+/* Hide the actual Streamlit buttons completely from layout */
+#nav-btn-row { display: none !important; }
 
 /* ── Chat input widget ── */
 [data-testid="stChatInputContainer"] { background:transparent !important; border:none !important; padding:0 !important; }
@@ -662,8 +659,7 @@ hr.div { border:none; border-top:1px solid var(--glass-bdr); margin:2rem 0 1.6re
 .bubble {
     padding: 0.5rem 0.85rem; border-radius: 15px; font-size: 0.92rem;
     min-height: 0; line-height: 1.55; word-break: break-word;
-    display: inline-block;
-    /* bubbles never wider than 68% of the viewport — prevents edge-to-edge */
+    display: block;
     max-width: 68%;
 }
 .bub-user {
@@ -712,7 +708,52 @@ details.file-details .copy-btn.copied { background:rgba(0,255,136,0.18) !importa
 @keyframes spin { to{transform:rotate(360deg)} }
 .gen-spin { display:inline-block; width:10px; height:10px; flex-shrink:0; border:2px solid rgba(0,255,136,0.18); border-top-color:var(--green); border-radius:50%; animation:spin .75s linear infinite; }
 </style>
+<script>
+(function() {
+    // Create a fixed proxy nav bar with real HTML buttons.
+    // Each proxy button clicks the corresponding hidden Streamlit button.
+    function injectProxyNav() {
+        if (document.getElementById('proxy-nav-bar')) return;
 
+        var bar = document.createElement('div');
+        bar.id = 'proxy-nav-bar';
+
+        var defs = [
+            { label: '\u2190', title: 'Home',      key: 'btn_home' },
+            { label: '\u21ba', title: 'New Chat',   key: 'btn_new' },
+            { label: '\U0001f4ce', title: 'Attach', key: 'toggle_up' },
+        ];
+
+        defs.forEach(function(d) {
+            var btn = document.createElement('button');
+            btn.textContent = d.label;
+            btn.title = d.title;
+            btn.addEventListener('click', function() {
+                // Find the Streamlit button by its data-testid key attribute
+                // Streamlit sets aria-label or we can find by text content
+                var all = document.querySelectorAll('[data-testid="stBottom"] ~ * button, #nav-btn-row button, .stButton button');
+                // Search all buttons for matching text
+                var target = null;
+                document.querySelectorAll('.stButton > button').forEach(function(b) {
+                    if (b.textContent.trim() === d.label) target = b;
+                });
+                if (target) { target.click(); return; }
+                // Fallback: match by key via parent element id
+                var wrap = document.querySelector('[data-testid="element-container"]:has(button)');
+                if (wrap) wrap.querySelector('button').click();
+            });
+            bar.appendChild(btn);
+        });
+
+        document.body.appendChild(bar);
+    }
+
+    // Inject immediately and re-check after Streamlit renders
+    injectProxyNav();
+    new MutationObserver(function() { injectProxyNav(); })
+        .observe(document.body, { childList: true, subtree: true });
+})();
+</script>
 """
 
 # ── Session init ──────────────────────────────────────────────────────────────
@@ -870,20 +911,14 @@ def render_chat():
                 st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
 
-    # ── Nav buttons rendered in a container that CSS fixes into the bottom bar ──
-    with st.container(key="nav_btns"):
-        st.markdown('<span id="nav-btn-anchor"></span>', unsafe_allow_html=True)
-        c1, c2, c3 = st.columns([1, 1, 1])
-        with c1:
-            if st.button("\u2190", key="btn_home", help="Home"):
-                go_home(); st.rerun()
-        with c2:
-            if st.button("\u21ba", key="btn_new", help="New Chat"):
-                new_chat(); st.rerun()
-        with c3:
-            if st.button("\U0001f4ce", key="toggle_up", help="Attach File"):
-                st.session_state.show_upload = not st.session_state.show_upload
-                st.rerun()
+    # ── Hidden Streamlit buttons (zero height, invisible) ──────────────────────
+    # Pure HTML proxy buttons in the fixed bar will click these via JS.
+    st.markdown('<div id="nav-btn-row" style="position:absolute;width:1px;height:1px;overflow:hidden;opacity:0;pointer-events:none;">', unsafe_allow_html=True)
+    if st.button("\u2190", key="btn_home"):  go_home(); st.rerun()
+    if st.button("\u21ba", key="btn_new"):   new_chat(); st.rerun()
+    if st.button("\U0001f4ce", key="toggle_up"):
+        st.session_state.show_upload = not st.session_state.show_upload; st.rerun()
+    st.markdown('</div>', unsafe_allow_html=True)
 
     user_input = st.chat_input("Message Spartan AI\u2026", key="chat_input")
 
