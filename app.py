@@ -42,7 +42,6 @@ def web_search(query: str, num_results: int = 5) -> str:
                     results.append(f'  URL: {topic["FirstURL"]}')
         if results:
             return "\n".join(results)
-        # Fallback: scrape HTML results
         r2 = requests.get(f"https://html.duckduckgo.com/html/?q={encoded}", headers=hdrs, timeout=8)
         snippets = re.findall(r'class="result__snippet"[^>]*>(.*?)</a>', r2.text, re.DOTALL)[:num_results]
         titles   = re.findall(r'class="result__a"[^>]*>(.*?)</a>',        r2.text, re.DOTALL)[:num_results]
@@ -544,12 +543,18 @@ html, body, [data-testid="stAppViewContainer"] {
 ::-webkit-scrollbar-track { background:transparent; }
 ::-webkit-scrollbar-thumb { background:rgba(0,255,136,0.16); border-radius:2px; }
 
-/* Proxy nav buttons hidden via JS (see script below) */
+/* Hide Streamlit proxy nav buttons — real buttons are in #spartan-nav bar */
+.stButton:has(button[kind="secondary"]) {
+    position: fixed !important; left: -9999px !important; top: -9999px !important;
+    opacity: 0 !important; pointer-events: none !important;
+    width: 1px !important; height: 1px !important; overflow: hidden !important;
+}
 
-/* stBottom: position:fixed bottom:0 — the actual bar */
+/* stBottom: the chat-input bar. Sits just above our nav bar. */
 [data-testid="stBottom"] {
     position: fixed !important;
-    bottom: 0 !important; left: 0 !important; right: 0 !important;
+    bottom: 44px !important;   /* leave room for #spartan-nav below */
+    left: 0 !important; right: 0 !important;
     z-index: 150 !important;
     background: rgba(2,10,5,0.97) !important;
     border-top: 1px solid var(--glass-bdr) !important;
@@ -557,38 +562,47 @@ html, body, [data-testid="stAppViewContainer"] {
     -webkit-backdrop-filter: blur(22px) !important;
     box-shadow: 0 -4px 24px rgba(0,0,0,0.5) !important;
     padding: 8px 14px !important;
+    min-height: 58px !important;
+    box-sizing: border-box !important;
+}
+
+/* Separate nav bar pinned right below the chat input */
+#spartan-nav {
+    position: fixed !important;
+    bottom: 0 !important; left: 0 !important; right: 0 !important;
+    height: 44px !important;
+    z-index: 151 !important;
+    background: rgba(2,10,5,0.98) !important;
+    border-top: 1px solid rgba(0,255,136,0.10) !important;
     display: flex !important;
     flex-direction: row !important;
     align-items: center !important;
-    gap: 8px !important;
-    min-height: 62px !important;
+    justify-content: center !important;
+    gap: 12px !important;
+    padding: 0 16px !important;
     box-sizing: border-box !important;
 }
-[data-testid="stBottom"] > div {
-    flex: 1 !important; min-width: 0 !important;
-    background: transparent !important; border: none !important;
-    padding: 0 !important; box-shadow: none !important;
-}
-
-/* Nav group JS-injected directly inside stBottom */
-#injected-nav {
-    display: flex !important; flex-direction: row !important;
-    align-items: center !important; gap: 6px !important; flex-shrink: 0 !important;
-}
-#injected-nav button {
-    width: 40px !important; height: 40px !important; border-radius: 50% !important;
-    background: rgba(0,255,136,0.04) !important; color: #00ff88 !important;
+#spartan-nav button {
+    height: 30px !important;
+    padding: 0 14px !important;
+    border-radius: 6px !important;
+    background: rgba(0,255,136,0.05) !important;
+    color: #00ff88 !important;
     border: 1px solid rgba(0,255,136,0.22) !important;
-    font-size: 1.15rem !important; line-height: 1 !important; cursor: pointer !important;
-    display: flex !important; align-items: center !important; justify-content: center !important;
-    transition: background .18s, border-color .18s !important;
-    padding: 0 !important; flex-shrink: 0 !important; font-family: inherit !important;
+    font-size: 0.75rem !important;
+    font-family: 'Share Tech Mono', monospace !important;
+    letter-spacing: 0.06em !important;
+    cursor: pointer !important;
+    transition: background .15s, border-color .15s !important;
+    white-space: nowrap !important;
+    line-height: 1 !important;
 }
-#injected-nav button:hover {
-    background: rgba(0,255,136,0.12) !important; border-color: #00ff88 !important;
-    box-shadow: 0 0 14px rgba(0,255,136,0.2) !important;
+#spartan-nav button:hover {
+    background: rgba(0,255,136,0.13) !important;
+    border-color: #00ff88 !important;
+    box-shadow: 0 0 10px rgba(0,255,136,0.18) !important;
 }
-#injected-nav button:active { transform: scale(0.94) !important; }
+#spartan-nav button:active { transform: scale(0.96) !important; }
 
 /* ── Chat input widget ── */
 [data-testid="stChatInputContainer"] { background:transparent !important; border:none !important; padding:0 !important; }
@@ -620,7 +634,7 @@ html, body, [data-testid="stAppViewContainer"] {
 
 /* ── Attach / pending strip (slides in just above the bar) ── */
 .attach-bar {
-    position: fixed; bottom: var(--bar-h); left: 0; right: 0;
+    position: fixed; bottom: 102px; left: 0; right: 0;
     z-index: 148;
     background: rgba(2,10,5,0.96);
     border-top: 1px solid rgba(0,255,136,0.08);
@@ -675,7 +689,7 @@ hr.div { border:none; border-top:1px solid var(--glass-bdr); margin:2rem 0 1.6re
 .hdr-status { display:flex; align-items:center; gap:5px; font-family:var(--mono); font-size:0.68rem; }
 
 /* ── Messages: enough bottom padding to fully clear the fixed bar ── */
-.msgs { padding: 1rem 0 90px; }
+.msgs { padding: 1rem 0 115px; }
 
 /* ── Chat bubbles: max-width cap + breathing room on both sides ── */
 .row-user {
@@ -742,69 +756,42 @@ details.file-details .copy-btn.copied { background:rgba(0,255,136,0.18) !importa
 </style>
 <script>
 (function() {
-    var PROXY = ["__home__","__new__","__up__"];
     var BTNS = [
-        { icon: '←', title: 'Home',     label: '__home__' },
-        { icon: '↺', title: 'New Chat', label: '__new__'  },
-        { icon: '📎', title: 'Attach', label: '__up__' },
+        { label: '← Home',     proxy: '__home__' },
+        { label: '↺ New Chat', proxy: '__new__'  },
+        { label: '📎 Attach', proxy: '__up__' },
     ];
 
-    function hideProxyBtns() {
-        document.querySelectorAll("button").forEach(function(b) {
-            if (PROXY.indexOf(b.textContent.trim()) !== -1) {
-                var p = b.parentElement;
-                while (p && !p.classList.contains("stButton")) p = p.parentElement;
-                if (p) p.style.cssText = "position:fixed!important;left:-9999px!important;top:-9999px!important;width:1px!important;height:1px!important;overflow:hidden!important;opacity:0!important;pointer-events:none!important";
-            }
-        });
-    }
-
-
-    function clickHidden(label) {
+    function clickProxy(proxy) {
         document.querySelectorAll('button').forEach(function(b) {
-            if (b.textContent.trim() === label) {
+            if (b.textContent.trim() === proxy) {
                 b.style.pointerEvents = 'auto';
                 b.click();
             }
         });
     }
 
-    function inject() {
-        var bottom = document.querySelector('[data-testid="stBottom"]');
-        if (!bottom) return;
-        var existing = document.getElementById('injected-nav');
-        if (existing && existing.parentNode === bottom) return;
-        if (existing) existing.remove();
-
+    function ensureNav() {
+        if (document.getElementById('spartan-nav')) return;
         var nav = document.createElement('div');
-        nav.id = 'injected-nav';
+        nav.id = 'spartan-nav';
         BTNS.forEach(function(d) {
             var b = document.createElement('button');
-            b.textContent = d.icon;
-            b.title = d.title;
+            b.textContent = d.label;
             b.type = 'button';
             b.addEventListener('click', function(e) {
                 e.preventDefault(); e.stopPropagation();
-                clickHidden(d.label);
+                clickProxy(d.proxy);
             });
             nav.appendChild(b);
         });
-
-        bottom.insertBefore(nav, bottom.firstChild);
-
-        Array.from(bottom.children).forEach(function(ch) {
-            if (ch.id !== 'injected-nav') {
-                ch.style.flex = '1';
-                ch.style.minWidth = '0';
-            }
-        });
+        document.body.appendChild(nav);
     }
 
-    function tick() { inject(); hideProxyBtns(); }
-    tick();
+    ensureNav();
     new MutationObserver(function(muts) {
         for (var i = 0; i < muts.length; i++) {
-            if (muts[i].addedNodes.length) { tick(); break; }
+            if (muts[i].addedNodes.length) { ensureNav(); break; }
         }
     }).observe(document.body, { childList: true, subtree: true });
 })();
@@ -995,7 +982,6 @@ def render_chat():
         user_bubble_ph.markdown(_user_bubble_html(user_input, file_att), unsafe_allow_html=True)
         think_ph.markdown(_thinking_html(), unsafe_allow_html=True)
 
-        # Search loop: keep going until AI response has no [output-search] tags
         MAX_SEARCH_ROUNDS = 5
         raw_response      = ""
 
@@ -1009,7 +995,6 @@ def render_chat():
                     if not started:
                         think_ph.empty()
                         started = True
-                    # Strip [output-search] blocks from live display
                     disp = re.sub(r'\[output-search\].*?\[/output-search\]', '', raw_response, flags=re.DOTALL)
                     disp = re.sub(r'\[output-search\][^\[]*$', '', disp)
                     inner = build_streaming_html(disp)
@@ -1030,12 +1015,10 @@ def render_chat():
 
             think_ph.empty()
 
-            # Check if AI wants to search
             search_queries = re.findall(r'\[output-search\](.*?)\[/output-search\]', raw_response, re.DOTALL)
             if not search_queries or search_round >= MAX_SEARCH_ROUNDS:
                 break
 
-            # Run each search and inject results
             search_block = ""
             for q in search_queries:
                 q = q.strip()
