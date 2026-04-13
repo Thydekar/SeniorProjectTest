@@ -174,8 +174,11 @@ def _strip_partial_tag(s: str) -> str:
 
 
 def safe_html(text: str) -> str:
-    # Collapse newlines to spaces so user bubbles never stack characters vertically
-    cleaned = str(text).strip().replace("\r\n", " ").replace("\r", " ").replace("\n", " ")
+    # Collapse all whitespace to single spaces so bubbles render as plain text
+    import re as _re
+    cleaned = str(text).strip()
+    cleaned = _re.sub(r'[\r\n\t]+', ' ', cleaned)
+    cleaned = _re.sub(r' {2,}', ' ', cleaned)
     return html_lib.escape(cleaned)
 
 
@@ -498,10 +501,12 @@ html, body, [data-testid="stAppViewContainer"] {
 ::-webkit-scrollbar-track { background:transparent; }
 ::-webkit-scrollbar-thumb { background:rgba(0,255,136,0.16); border-radius:2px; }
 
-/* ── stBottom: always pinned to viewport bottom, styled as the input bar ── */
+/* ── stBottom: pinned to viewport bottom, leave left gap for nav buttons ── */
 [data-testid="stBottom"] {
     position: fixed !important;
-    bottom: 0 !important; left: 0 !important; right: 0 !important;
+    bottom: 0 !important;
+    left: 140px !important;   /* leave room for the 3 nav buttons on the left */
+    right: 0 !important;
     z-index: 150 !important;
     background: rgba(2,10,5,0.97) !important;
     border-top: 1px solid var(--glass-bdr) !important;
@@ -509,30 +514,33 @@ html, body, [data-testid="stAppViewContainer"] {
     -webkit-backdrop-filter: blur(22px) !important;
     box-shadow: 0 -4px 24px rgba(0,0,0,0.5) !important;
     padding: 8px 16px 8px 8px !important;
-    display: flex !important;
-    flex-direction: row !important;
-    align-items: center !important;
-    gap: 8px !important;
 }
 [data-testid="stBottom"] > div {
     background: transparent !important;
     border: none !important;
     padding: 0 !important;
     box-shadow: none !important;
-    flex: 1 !important;
-    min-width: 0 !important;
 }
 
-/* ── Nav button row (JS moves it into stBottom) ── */
+/* ── Nav button row: fixed bottom-left, same height as stBottom ── */
 #nav-anchor + [data-testid="stHorizontalBlock"] {
-    flex-shrink: 0 !important;
+    position: fixed !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    width: 136px !important;
+    height: var(--bar-h) !important;
+    z-index: 151 !important;
+    background: rgba(2,10,5,0.97) !important;
+    border-top: 1px solid var(--glass-bdr) !important;
+    backdrop-filter: blur(22px) !important;
+    -webkit-backdrop-filter: blur(22px) !important;
     display: flex !important;
     flex-direction: row !important;
     align-items: center !important;
+    justify-content: center !important;
     gap: 4px !important;
-    width: auto !important;
     margin: 0 !important;
-    padding: 0 !important;
+    padding: 0 8px !important;
 }
 #nav-anchor + [data-testid="stHorizontalBlock"] [data-testid="stColumn"] {
     flex: 0 0 40px !important;
@@ -660,6 +668,7 @@ hr.div { border:none; border-top:1px solid var(--glass-bdr); margin:2rem 0 1.6re
     padding: 0.5rem 0.85rem; border-radius: 15px; font-size: 0.92rem;
     min-height: 0; line-height: 1.55; word-break: break-word;
     display: inline-block;
+    white-space: normal;
     /* bubbles never wider than 68% of the viewport — prevents edge-to-edge */
     max-width: 68%;
 }
@@ -709,52 +718,7 @@ details.file-details .copy-btn.copied { background:rgba(0,255,136,0.18) !importa
 @keyframes spin { to{transform:rotate(360deg)} }
 .gen-spin { display:inline-block; width:10px; height:10px; flex-shrink:0; border:2px solid rgba(0,255,136,0.18); border-top-color:var(--green); border-radius:50%; animation:spin .75s linear infinite; }
 </style>
-<script>
-(function fixNavButtons() {
-    function patch() {
-        var bottom = document.querySelector('[data-testid="stBottom"]');
-        var anchor = document.getElementById('nav-anchor');
-        if (!bottom || !anchor) return;
 
-        var block = anchor.nextElementSibling;
-        if (!block || block.dataset.testid !== 'stHorizontalBlock') return;
-
-        // Move block into stBottom if not already there
-        if (block.parentNode !== bottom) {
-            bottom.insertBefore(block, bottom.firstChild);
-        }
-
-        // Style the block as a tight left-side flex row
-        Object.assign(block.style, {
-            position: 'relative', bottom: 'auto', left: 'auto',
-            display: 'flex', flexDirection: 'row', alignItems: 'center',
-            gap: '4px', flexShrink: '0', width: 'auto',
-            margin: '0', padding: '0'
-        });
-
-        // Fix each column to 40px
-        block.querySelectorAll('[data-testid="stColumn"]').forEach(function(col) {
-            col.style.cssText = 'flex:0 0 40px!important;width:40px!important;min-width:40px!important;max-width:40px!important;padding:0!important;';
-            var inner = col.firstElementChild;
-            if (inner) inner.style.cssText = 'margin:0!important;padding:0!important;';
-        });
-
-        // Make stBottom a flex row: buttons left, input right
-        Object.assign(bottom.style, {
-            display: 'flex', flexDirection: 'row', alignItems: 'center',
-            gap: '8px', padding: '8px 16px 8px 8px'
-        });
-
-        // The chat input container should fill remaining space
-        var inputContainer = bottom.querySelector('[data-testid="stChatInputContainer"]');
-        if (inputContainer) inputContainer.style.cssText = 'flex:1!important;min-width:0!important;';
-    }
-
-    var obs = new MutationObserver(patch);
-    obs.observe(document.body, { childList: true, subtree: true });
-    patch();
-})();
-</script>
 """
 
 # ── Session init ──────────────────────────────────────────────────────────────
