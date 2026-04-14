@@ -888,7 +888,7 @@ def render_home():
         if st.button("⟳  Refresh Status", use_container_width=True):
             st.session_state.model_status = {}; st.rerun()
 
-    st.markdown('<div class="hm-footer">SPARTAN AI · v1.0 · dgeurts</div>', unsafe_allow_html=True)
+    st.markdown('<div class="hm-footer">SPARTAN AI &nbsp;&middot;&nbsp; <span style="color:var(--green);opacity:.8">v1.0.0</span> &nbsp;&middot;&nbsp; dgeurts &nbsp;&middot;&nbsp; <span style="opacity:.4">Streamlit &amp; Ollama</span></div>', unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
 
