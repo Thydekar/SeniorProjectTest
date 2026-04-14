@@ -1,4 +1,5 @@
 import streamlit as st
+import streamlit.components.v1 as components
 import requests
 import json
 import base64
@@ -82,20 +83,10 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
-# ── Custom SVG favicon ────────────────────────────────────────────────────────
-_FAVICON_SVG = (
-    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">'
-    '<defs><linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%">'
-    '<stop offset="0%" stop-color="#00ff88"/>'
-    '<stop offset="50%" stop-color="#00cc6a"/>'
-    '<stop offset="100%" stop-color="#004433" stop-opacity="0.9"/>'
-    '</linearGradient></defs>'
-    '<polygon points="16,1 31,16 16,31 1,16" fill="url(#g)"/>'
-    '</svg>'
-)
-_FAVICON_B64 = base64.b64encode(_FAVICON_SVG.encode()).decode()
+# ── Custom favicon (diamond logo) ───────────────────────────────────────────
+_FAVICON_B64 = "/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1BST0ZJTEUAAQEAAAHIAAAAAAQwAABtbnRyUkdCIFhZWiAH4AABAAEAAAAAAABhY3NwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAA9tYAAQAAAADTLQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAlkZXNjAAAA8AAAACRyWFlaAAABFAAAABRnWFlaAAABKAAAABRiWFlaAAABPAAAABR3dHB0AAABUAAAABRyVFJDAAABZAAAAChnVFJDAAABZAAAAChiVFJDAAABZAAAAChjcHJ0AAABjAAAADxtbHVjAAAAAAAAAAEAAAAMZW5VUwAAAAgAAAAcAHMAUgBHAEJYWVogAAAAAAAAb6IAADj1AAADkFhZWiAAAAAAAABimQAAt4UAABjaWFlaIAAAAAAAACSgAAAPhAAAts9YWVogAAAAAAAA9tYAAQAAAADTLXBhcmEAAAAAAAQAAAACZmYAAPKnAAANWQAAE9AAAApbAAAAAAAAAABtbHVjAAAAAAAAAAEAAAAMZW5VUwAAACAAAAAcAEcAbwBvAGcAbABlACAASQBuAGMALgAgADIAMAAxADb/2wBDAAUDBAQEAwUEBAQFBQUGBwwIBwcHBw8LCwkMEQ8SEhEPERETFhwXExQaFRERGCEYGh0dHx8fExciJCIeJBweHx7/2wBDAQUFBQcGBw4ICA4eFBEUHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh7/wAARCAA3AEEDASIAAhEBAxEB/8QAHAABAAEFAQEAAAAAAAAAAAAAAAIDBAUGCAEH/8QALBAAAQQBAgYABgIDAAAAAAAAAQACAwQFBhEHEiExQVETUmFxgbEi0kKR8f/EABsBAAEFAQEAAAAAAAAAAAAAAAEAAgMEBwUG/8QAKBEAAQQBAgUDBQAAAAAAAAAAAQACAxEEBVEGEiExQWGBwRMUcaHR/9oADAMBAAIRAxEAPwDj1ERNUKKXgfZRUz2H2SQXiLY9FaLzurpLAxMDPh12Fz5ZXcrObbowH5j/AN2WCu1bFK5LTtwvgsQvLJI3jZzSO4IQsE0oGZUL5XQtcC5tWL6i91TaFVa1RaFWjbuiU9xpR5UVxyIgoudY3c+ym59leIirKkCd+5W3cN9E5HWWVEURfBj4SDatEdGj5W+3H1+SrXhvpSXWGpI8W21HWia0yzvc4cwYCN+Vvk9fx3K6mwmLx2BxMOLxddsFaEbNaO5PlxPknyVBNLydB3XjOKuJxpjft4OspHs0b/nYe59WFxePwOJhxeLrtgrQjZoHcny4nyT5K0fixoSvqmsb9EMgy8Tf4v7CcD/B319H8du29zSLH2p9t1Sa4g2FlmBl5ONkjJjcee7vfe978rk6xBZqWpKtqOSGeJxa9jxsWkeCqsJPsr7RxN0rVz1d1+AxwZGFm/xCdmyNHhx/R8fbt8Xh6Hb0ugx4eLW0aXqsepQfUApw7jY/xV+vs/7Re7oirqwiIieukrjG3bWOvQ3qM769mFwfHIw7FpXSHDPiBW1ZQFa0WQZeFm8sQ6CQfOz6ex4XM6uaVuzQtw3Kcz4LER5o5GHYtKjkjDwuBr2gwavDTujx2d8H0XW1qfYHqsTdtNY1z3uDWtG5JOwA9rUdEa7r6hx5juOjr5CBm8zSdmvA7vb9PY8LQeI+tn5aR+MxkhbQadpJB0Mx/r+1VbESaWeafw1lSZRx3trl7nwB834VTiJrV2WlfjMZIW0WnaSQdDMf6/tafCVaNKrRu2VxrQ0UFqONgxYcIiiFAfv1KvOZFQ50ST+RY5EROV5FLwPsiJIL0Eg7gkeOi8REklJp8Ko0oiSaVPmREQTKC//Z"
 st.markdown(
-    f'<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,{_FAVICON_B64}">',
+    f'<link rel="icon" type="image/jpeg" href="data:image/jpeg;base64,{_FAVICON_B64}">',
     unsafe_allow_html=True,
 )
 
@@ -192,12 +183,10 @@ def build_user_content(text: str, file_info) -> str:
 
 def _strip_tags(s: str) -> str:
     s = re.sub(r'\[/?output-text\]', '', s)
-    s = re.sub(r'\[/?output-assistant\]', '', s)
     s = re.sub(r'\[/?input-[^\]]+\]', '', s)
     s = re.sub(r'\[output-file-[^\]]+\]', '', s)
     s = re.sub(r'\[/output-file-[^\]]+\]', '', s)
-    s = re.sub(r'\[output-search\].*?\[/output-search\]', '', s, flags=re.DOTALL)
-    s = re.sub(r'\[output-search\][^\[]*$', '', s)
+    s = re.sub(r'\[/?output-search\]', '', s)
     s = re.sub(r'\n{3,}', '\n\n', s)
     return s.strip()
 
@@ -215,14 +204,15 @@ def safe_html(text: str) -> str:
 
 def parse_output(raw: str) -> list:
     """Final parse after streaming completes. Returns list of {type, content/...} dicts."""
-    file_pat = re.compile(
+    file_pat   = re.compile(
         r'\[output-file-([a-zA-Z0-9]+)-([^\]]+)\](.*?)\[/output-file-\1-\2\]',
         re.DOTALL,
     )
-    text_pat = re.compile(r'\[output-text\](.*?)\[/output-text\]', re.DOTALL)
+    text_pat   = re.compile(r'\[output-text\](.*?)\[/output-text\]', re.DOTALL)
+    search_pat = re.compile(r'\[output-search\](.*?)\[/output-search\]', re.DOTALL)
 
     all_matches = sorted(
-        list(file_pat.finditer(raw)) + list(text_pat.finditer(raw)),
+        list(file_pat.finditer(raw)) + list(text_pat.finditer(raw)) + list(search_pat.finditer(raw)),
         key=lambda m: m.start(),
     )
 
@@ -231,7 +221,9 @@ def parse_output(raw: str) -> list:
         before = _strip_tags(raw[last : m.start()])
         if before:
             segments.append({"type": "text", "content": before})
-        if m.lastindex == 3:
+        if m.re.pattern == search_pat.pattern:
+            segments.append({"type": "search", "query": m.group(1).strip(), "results": ""})
+        elif m.lastindex == 3:
             segments.append({
                 "type":     "file",
                 "filetype": m.group(1),
@@ -377,6 +369,31 @@ def _thinking_html() -> str:
     )
 
 
+def _search_segment_html(query: str, results: str = "", in_progress: bool = False) -> str:
+    """Render a collapsible search result widget."""
+    q_esc = html_lib.escape(query.strip())
+    if in_progress:
+        return (
+            f'<details class="file-details gen-active" open>'
+            f'  <summary>'
+            f'    <span class="sum-left"><span class="gen-spin"></span>&nbsp;'
+            f'    🔍 Searching: <em>{q_esc}</em>…</span>'
+            f'    <span class="sum-toggle">▶</span>'
+            f'  </summary>'
+            f'</details>'
+        )
+    r_esc = html_lib.escape(results.strip()) if results else "(no results)"
+    return (
+        f'<details class="file-details">'
+        f'  <summary>'
+        f'    <span class="sum-left">🔍 Web search: <em style="color:var(--green);opacity:.85">{q_esc}</em></span>'
+        f'    <span class="sum-toggle">▶</span>'
+        f'  </summary>'
+        f'  <div class="file-content-box">{r_esc}</div>'
+        f'</details>'
+    )
+
+
 def _segments_to_html(segments: list) -> str:
     parts = []
     for seg in segments:
@@ -385,8 +402,9 @@ def _segments_to_html(segments: list) -> str:
             if t:
                 parts.append(f'<div style="margin-bottom:.3rem">{t}</div>')
         elif seg["type"] == "file":
-            # keep_open=True so completed widgets stay open (user may have had them open)
             parts.append(_file_segment_html(seg, keep_open=True))
+        elif seg["type"] == "search":
+            parts.append(_search_segment_html(seg["query"], seg.get("results", "")))
     return "".join(parts)
 
 
@@ -525,24 +543,24 @@ html, body, [data-testid="stAppViewContainer"] {
 [data-testid="stToolbar"], [data-testid="stDecoration"],
 [data-testid="stSidebarNav"], [data-testid="collapsedControl"] { display:none !important; }
 
-.block-container { padding:0 !important; max-width:100% !important; }
+.block-container { padding:0 0 60px 0 !important; max-width:100% !important; }
 [data-testid="stMainBlockContainer"] { padding:0 !important; }
 
 ::-webkit-scrollbar { width:4px; }
 ::-webkit-scrollbar-track { background:transparent; }
 ::-webkit-scrollbar-thumb { background:rgba(0,255,136,0.16); border-radius:2px; }
 
-/* stBottom: raised to sit above the nav bar */
+/* ── Unified bottom panel: chat input area ── */
 [data-testid="stBottom"] {
     position: fixed !important;
-    bottom: 48px !important; left: 0 !important; right: 0 !important;
+    bottom: 0 !important; left: 0 !important; right: 0 !important;
     z-index: 150 !important;
     background: rgba(2,10,5,0.97) !important;
     border-top: 1px solid var(--glass-bdr) !important;
     backdrop-filter: blur(22px) !important;
     -webkit-backdrop-filter: blur(22px) !important;
     box-shadow: 0 -4px 24px rgba(0,0,0,0.5) !important;
-    padding: 8px 14px 6px !important;
+    padding: 6px 14px 8px !important;
     box-sizing: border-box !important;
 }
 [data-testid="stBottom"] > div {
@@ -550,80 +568,57 @@ html, body, [data-testid="stAppViewContainer"] {
     padding: 0 !important; box-shadow: none !important;
 }
 
-/* Nav bar: appended to body by JS, fully outside Streamlit DOM */
-#spartan-nav {
-    position: fixed !important;
-    bottom: 0 !important; left: 0 !important; right: 0 !important;
-    height: 48px !important;
-    z-index: 160 !important;
+/* ── Nav buttons row injected as first child of stBottom ── */
+#spartan-btns {
     display: flex !important;
-    flex-direction: row !important;
-    align-items: center !important;
-    justify-content: center !important;
-    gap: 12px !important;
-    background: rgba(1,8,4,0.99) !important;
-    border-top: 1px solid rgba(0,255,136,0.14) !important;
-    padding: 0 20px !important;
+    gap: 6px !important;
+    padding: 0 0 6px 0 !important;
+    margin: 0 !important;
     box-sizing: border-box !important;
 }
-#spartan-nav button {
+#spartan-btns button {
+    flex: 1 !important;
     display: inline-flex !important;
     align-items: center !important;
     justify-content: center !important;
-    gap: 7px !important;
-    height: 32px !important;
-    padding: 0 18px !important;
-    border-radius: 8px !important;
-    background: rgba(0,255,136,0.05) !important;
-    color: #00ff88 !important;
-    border: 1px solid rgba(0,255,136,0.25) !important;
-    font-size: 0.75rem !important;
+    gap: 5px !important;
+    height: 28px !important;
+    padding: 0 10px !important;
+    border-radius: 6px !important;
+    background: rgba(0,255,136,0.04) !important;
+    color: rgba(180,220,200,0.7) !important;
+    border: 1px solid rgba(0,255,136,0.14) !important;
+    font-size: 0.7rem !important;
     font-family: 'Share Tech Mono', monospace !important;
-    letter-spacing: 0.05em !important;
+    letter-spacing: 0.06em !important;
     cursor: pointer !important;
-    transition: background .15s, border-color .15s, box-shadow .15s !important;
+    transition: background .15s, border-color .15s, color .15s !important;
     white-space: nowrap !important;
-    flex-shrink: 0 !important;
 }
-#spartan-nav button:hover {
-    background: rgba(0,255,136,0.14) !important;
-    border-color: #00ff88 !important;
-    box-shadow: 0 0 14px rgba(0,255,136,0.22) !important;
+#spartan-btns button:hover {
+    background: rgba(0,255,136,0.10) !important;
+    border-color: rgba(0,255,136,0.5) !important;
+    color: #00ff88 !important;
 }
-#spartan-nav button:active { transform: scale(0.95) !important; }
+#spartan-btns button:active { transform: scale(0.96) !important; }
+#spartan-btns button svg { flex-shrink: 0 !important; }
+
+/* ── Main content scroll fix: constrained height so nothing hides behind fixed bar ── */
+body.spartan-chat [data-testid="stMain"] {
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+}
 
 /* ── Chat input widget ── */
 [data-testid="stChatInputContainer"] { background:transparent !important; border:none !important; padding:0 !important; }
-[data-testid="stChatInput"],
-[data-testid="stChatInput"]:focus,
-[data-testid="stChatInput"]:focus-within,
-[data-testid="stChatInput"]:focus-visible,
-[data-testid="stChatInput"][data-focused="true"],
-[data-testid="stChatInputContainer"] > div,
-[data-testid="stChatInputContainer"] > div:focus-within {
-    background:rgba(4,14,8,0.92) !important;
-    border:1px solid var(--glass-bdr) !important;
-    border-color: rgba(0,255,136,0.14) !important;
-    outline: none !important;
-    box-shadow: none !important;
+[data-testid="stChatInput"] {
+    background:rgba(4,14,8,0.92) !important; border:1px solid var(--glass-bdr) !important;
     border-radius:11px !important; color:var(--text) !important;
     font-family:var(--mono) !important; transition:border-color .2s, box-shadow .2s;
 }
 [data-testid="stChatInput"]:focus-within {
     border-color:rgba(0,255,136,0.4) !important;
     box-shadow:0 0 18px rgba(0,255,136,0.1) !important;
-}
-/* Kill any red/orange error borders Streamlit injects */
-[data-testid="stChatInputContainer"] *,
-[data-testid="stChatInput"] * {
-    outline: none !important;
-    box-shadow: none !important;
-}
-[data-baseweb="textarea"],
-[data-baseweb="base-input"] {
-    border-color: rgba(0,255,136,0.14) !important;
-    box-shadow: none !important;
-    outline: none !important;
 }
 [data-testid="stChatInput"] textarea { color:var(--text) !important; font-family:var(--mono) !important; font-size:.87rem !important; }
 [data-testid="stChatInput"] button { color:var(--green) !important; }
@@ -642,18 +637,37 @@ html, body, [data-testid="stAppViewContainer"] {
 }
 .stButton > button:active { transform:scale(0.97) !important; }
 
-/* ── Attach / pending strip (slides in just above the bar) ── */
+/* ── Attach / pending strip (positioned by JS above the unified bar) ── */
 .attach-bar {
-    position: fixed; bottom: 136px; left: 0; right: 0;
+    position: fixed; bottom: 120px; left: 0; right: 0;
     z-index: 148;
-    background: rgba(2,10,5,0.96);
-    border-top: 1px solid rgba(0,255,136,0.08);
-    padding: 0.35rem 1rem;
+    background: rgba(2,10,5,0.98);
+    border-top: 1px solid rgba(0,255,136,0.10);
+    border-bottom: 1px solid rgba(0,255,136,0.06);
+    padding: 0.4rem 1.2rem;
 }
-.upload-collapse { padding:.3rem .4rem; background:rgba(0,255,136,0.02); border:1px dashed rgba(0,255,136,0.14); border-radius:8px; }
-[data-testid="stFileUploaderDropzone"] { background:rgba(0,255,136,0.02) !important; border:1px dashed rgba(0,255,136,0.18) !important; border-radius:8px !important; }
-[data-testid="stFileUploaderDropzone"] * { color:var(--text-dim) !important; font-family:var(--mono) !important; font-size:.77rem !important; }
-[data-testid="stFileUploadDeleteBtn"] button { color:var(--red) !important; }
+.upload-collapse {
+    padding: .5rem .7rem;
+    background: rgba(0,255,136,0.02);
+    border: 1px dashed rgba(0,255,136,0.18);
+    border-radius: 10px;
+    margin-top: .3rem;
+}
+[data-testid="stFileUploaderDropzone"] {
+    background: rgba(0,255,136,0.02) !important;
+    border: 1px dashed rgba(0,255,136,0.22) !important;
+    border-radius: 8px !important;
+    padding: .6rem !important;
+}
+[data-testid="stFileUploaderDropzone"] p,
+[data-testid="stFileUploaderDropzone"] span,
+[data-testid="stFileUploaderDropzone"] small {
+    color: var(--text-dim) !important;
+    font-family: var(--mono) !important;
+    font-size: .75rem !important;
+}
+[data-testid="stFileUploadDeleteBtn"] button { color: var(--red) !important; }
+[data-testid="stFileUploader"] label { color: var(--text-dim) !important; font-family: var(--mono) !important; font-size: .75rem !important; }
 .pending { display:inline-flex; align-items:center; gap:5px; font-family:var(--mono); font-size:0.7rem; color:var(--green); background:rgba(0,255,136,0.05); border:1px solid rgba(0,255,136,0.2); border-radius:999px; padding:2px 10px 2px 7px; }
 
 /* ── Home page ── */
@@ -693,17 +707,16 @@ hr.div { border:none; border-top:1px solid var(--glass-bdr); margin:2rem 0 1.6re
 .hm-footer { text-align:center; margin-top:2.5rem; font-family:var(--mono); font-size:0.65rem; color:var(--text-dim); letter-spacing:.15em; }
 
 /* ── Chat header ── */
-.chat-hdr { display:flex; align-items:center; gap:0.75rem; padding:0.55rem 1.3rem; background:rgba(2,10,5,0.95); border-bottom:1px solid var(--glass-bdr); backdrop-filter:blur(20px); position:sticky; top:0; z-index:200; box-shadow:0 2px 16px rgba(0,0,0,0.4); }
+.chat-hdr { display:flex; align-items:center; gap:0.75rem; padding:0.45rem 0.7rem 0.45rem 1.3rem; background:rgba(2,10,5,0.95); border-bottom:1px solid var(--glass-bdr); backdrop-filter:blur(20px); position:sticky; top:0; z-index:200; box-shadow:0 2px 16px rgba(0,0,0,0.4); }
 .hdr-icon  { font-size:1.1rem; line-height:1; }
 .hdr-title { font-family:var(--mono); font-size:0.92rem; color:var(--green); text-shadow:0 0 10px rgba(0,255,136,0.4); flex:1; }
 .hdr-status { display:flex; align-items:center; gap:5px; font-family:var(--mono); font-size:0.68rem; }
-
 /* ── Messages: enough bottom padding to fully clear the fixed bar ── */
 .msgs { padding: 1rem 0 140px; }
 
 /* ── Chat bubbles: max-width cap + breathing room on both sides ── */
 .row-user {
-    display:flex; justify-content:flex-end;
+    display:flex; flex-direction:column; align-items:flex-end;
     padding: 0.25rem 1.4rem 0.25rem 1.4rem;
     margin: 0;
 }
@@ -764,83 +777,98 @@ details.file-details .copy-btn.copied { background:rgba(0,255,136,0.18) !importa
 @keyframes spin { to{transform:rotate(360deg)} }
 .gen-spin { display:inline-block; width:10px; height:10px; flex-shrink:0; border:2px solid rgba(0,255,136,0.18); border-top-color:var(--green); border-radius:50%; animation:spin .75s linear infinite; }
 </style>
+"""
+
+# ── Nav JS injection via components.html ──────────────────────────────────────
+def _make_nav_js(show_nav: bool) -> str:
+    flag = "true" if show_nav else "false"
+    return f"""
 <script>
-(function() {
-  var PROXIES = ["__home__", "__new__", "__up__"];
+(function() {{
+  var SHOW_NAV = {flag};
+  var doc = window.parent.document;
+  var PROXIES = ['__home__', '__new__', '__up__'];
   var BTNS = [
-    { icon: "🏠", label: "Home",    proxy: "__home__" },
-    { icon: "✨",     label: "New Chat", proxy: "__new__"  },
-    { icon: "📎", label: "Attach",   proxy: "__up__"   }
+    {{ icon: '\U0001F3E0', label: 'Home',     proxy: '__home__' }},
+    {{ icon: '\u2728',     label: 'New Chat', proxy: '__new__'  }},
+    {{ icon: '\U0001F4CE', label: 'Attach',   proxy: '__up__'   }}
   ];
 
-  function nukeElement(el) {
-    while (el && el !== document.body) {
-      el.style.setProperty("display",        "none",     "important");
-      el.style.setProperty("visibility",     "hidden",   "important");
-      el.style.setProperty("opacity",        "0",        "important");
-      el.style.setProperty("pointer-events", "none",     "important");
-      el.style.setProperty("position",       "absolute", "important");
-      el.style.setProperty("width",          "0",        "important");
-      el.style.setProperty("height",         "0",        "important");
-      el.style.setProperty("overflow",       "hidden",   "important");
-      el.style.setProperty("margin",         "0",        "important");
-      el.style.setProperty("padding",        "0",        "important");
-      var isStBtn = el.className && String(el.className).indexOf("stButton") !== -1;
+  function nukeEl(el) {{
+    while (el && el !== doc.body) {{
+      el.style.setProperty('display',        'none',     'important');
+      el.style.setProperty('visibility',     'hidden',   'important');
+      el.style.setProperty('opacity',        '0',        'important');
+      el.style.setProperty('pointer-events', 'none',     'important');
+      el.style.setProperty('position',       'absolute', 'important');
+      el.style.setProperty('width',          '0',        'important');
+      el.style.setProperty('height',         '0',        'important');
+      el.style.setProperty('overflow',       'hidden',   'important');
+      el.style.setProperty('margin',         '0',        'important');
+      el.style.setProperty('padding',        '0',        'important');
+      var isSt = el.className && String(el.className).indexOf('stButton') !== -1;
       el = el.parentElement;
-      if (isStBtn) break;
-    }
-  }
+      if (isSt) break;
+    }}
+  }}
 
-  function hideProxies() {
-    document.querySelectorAll("button").forEach(function(b) {
-      if (PROXIES.indexOf(b.textContent.trim()) !== -1) nukeElement(b);
-    });
-  }
+  function hideProxies() {{
+    doc.querySelectorAll('button').forEach(function(b) {{
+      if (PROXIES.indexOf(b.textContent.trim()) !== -1) nukeEl(b);
+    }});
+  }}
 
-  function clickProxy(proxy) {
-    var all = document.querySelectorAll("button");
-    for (var i = 0; i < all.length; i++) {
-      if (all[i].textContent.trim() === proxy) {
-        all[i].dispatchEvent(new MouseEvent("click", {bubbles: true, cancelable: true}));
+  function clickProxy(p) {{
+    var a = doc.querySelectorAll('button');
+    for (var i = 0; i < a.length; i++) {{
+      if (a[i].textContent.trim() === p) {{
+        a[i].dispatchEvent(new MouseEvent('click', {{bubbles: true, cancelable: true}}));
         return;
-      }
-    }
-  }
+      }}
+    }}
+  }}
 
-  function inject() {
-    if (document.getElementById("spartan-nav")) return;
-    var nav = document.createElement("div");
-    nav.id = "spartan-nav";
-    BTNS.forEach(function(d) {
-      var btn = document.createElement("button");
-      btn.type = "button";
-      var iconSpan = document.createElement("span");
-      iconSpan.textContent = d.icon;
-      iconSpan.style.fontSize = "1.05rem";
-      iconSpan.style.lineHeight = "1";
-      var labelSpan = document.createElement("span");
-      labelSpan.textContent = d.label;
-      btn.appendChild(iconSpan);
-      btn.appendChild(labelSpan);
-      (function(proxy) {
-        btn.addEventListener("click", function(e) {
+  function removeNav() {{
+    var old = doc.getElementById('spartan-nav');
+    if (old) old.remove();
+  }}
+
+  function inject() {{
+    if (doc.getElementById('spartan-nav')) return;
+    var nav = doc.createElement('div');
+    nav.id = 'spartan-nav';
+    BTNS.forEach(function(d) {{
+      var btn = doc.createElement('button');
+      btn.type = 'button';
+      var ico = doc.createElement('span');
+      ico.textContent = d.icon;
+      ico.style.cssText = 'font-size:1.1rem;line-height:1';
+      var lbl = doc.createElement('span');
+      lbl.textContent = d.label;
+      btn.appendChild(ico);
+      btn.appendChild(lbl);
+      (function(p) {{
+        btn.addEventListener('click', function(e) {{
           e.preventDefault(); e.stopPropagation();
-          clickProxy(proxy);
-        });
-      })(d.proxy);
+          clickProxy(p);
+        }});
+      }})(d.proxy);
       nav.appendChild(btn);
-    });
-    document.body.appendChild(nav);
-  }
+    }});
+    doc.body.appendChild(nav);
+  }}
 
-  function tick() { inject(); hideProxies(); }
+  function tick() {{
+    if (!SHOW_NAV) {{ removeNav(); hideProxies(); return; }}
+    inject(); hideProxies();
+  }}
   tick();
-  new MutationObserver(function(muts) {
-    for (var i = 0; i < muts.length; i++) {
-      if (muts[i].addedNodes.length) { tick(); break; }
-    }
-  }).observe(document.body, { childList: true, subtree: true });
-})();
+  new MutationObserver(function(ms) {{
+    for (var i = 0; i < ms.length; i++) {{
+      if (ms[i].addedNodes.length) {{ tick(); break; }}
+    }}
+  }}).observe(doc.body, {{ childList: true, subtree: true }});
+}})();
 </script>
 """
 
@@ -856,6 +884,11 @@ def _init():
 
 _init()
 st.markdown(CSS, unsafe_allow_html=True)
+# Use height=1 (not 0) to avoid Streamlit component iframe 404-polling bug.
+# Also key by page so the iframe is only replaced when the page actually changes,
+# not on every rerender.
+_nav_key = f"nav_{st.session_state.page}"
+components.html(_make_nav_js(st.session_state.page == "chat"), height=1, key=_nav_key)
 
 # ── Nav helpers ───────────────────────────────────────────────────────────────
 def go_home():
@@ -921,8 +954,14 @@ def render_home():
         if st.button("⟳  Refresh Status", use_container_width=True):
             st.session_state.model_status = {}; st.rerun()
 
-    st.markdown('<div class="hm-footer">SPARTAN AI &nbsp;&middot;&nbsp; <span style="color:var(--green);opacity:.8">v1.0.1</span> &nbsp;&middot;&nbsp; dgeurts &nbsp;&middot;&nbsp; <span style="opacity:.4">Streamlit &amp; Ollama</span></div>', unsafe_allow_html=True)
+    st.markdown('<div class="hm-footer">SPARTAN AI &nbsp;&middot;&nbsp; <span style="color:var(--green);opacity:.8">v1.0.0</span> &nbsp;&middot;&nbsp; dgeurts &nbsp;&middot;&nbsp; <span style="opacity:.4">Streamlit &amp; Ollama</span></div>', unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
+
+    # Proxy buttons (sidebar is in DOM even when collapsed; JS clicks them)
+    with st.sidebar:
+        if st.button("__home__", key="btn_home"):  go_home(); st.rerun()
+        if st.button("__new__",  key="btn_new"):   new_chat(); st.rerun()
+        if st.button("__up__",   key="toggle_up_home"): pass
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -999,7 +1038,7 @@ def render_chat():
                 st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
 
-    # Hidden proxy buttons in sidebar (sidebar is CSS-hidden; JS clicks by text)
+    # Proxy buttons (sidebar is in DOM even when collapsed; JS clicks them)
     with st.sidebar:
         if st.button("__home__", key="btn_home"):  go_home(); st.rerun()
         if st.button("__new__",  key="btn_new"):   new_chat(); st.rerun()
@@ -1031,6 +1070,8 @@ def render_chat():
 
         MAX_SEARCH_ROUNDS = 5
         raw_response      = ""
+        # Accumulates search widgets to show above the final answer
+        search_segs: list = []
 
         for search_round in range(MAX_SEARCH_ROUNDS + 1):
             raw_response = ""
@@ -1041,13 +1082,34 @@ def render_chat():
                     if not started:
                         think_ph.empty()
                         started = True
-                    disp = re.sub(r'\[output-search\].*?\[/output-search\]', '', raw_response, flags=re.DOTALL)
-                    disp = re.sub(r'\[output-search\][^\[]*$', '', disp)
-                    inner = build_streaming_html(disp)
+
+                    # If a complete [output-search]...[/output-search] is present,
+                    # stop streaming — this turn is a search-only turn.
+                    if '[/output-search]' in raw_response:
+                        break
+
+                    # While [output-search] is open (partial), show spinner widget
+                    if '[output-search]' in raw_response and '[/output-search]' not in raw_response:
+                        partial_q = raw_response.split('[output-search]', 1)[1]
+                        partial_q = re.sub(r'\[[^\]]*$', '', partial_q).strip()
+                        spinner_html = _search_segment_html(partial_q or "…", in_progress=True)
+                        search_html = "".join(_search_segment_html(s["query"], s.get("results","")) for s in search_segs)
+                        stream_ph.markdown(
+                            f'<div class="row-ai"><div class="bubble bub-ai">{search_html}{spinner_html}</div></div>',
+                            unsafe_allow_html=True,
+                        )
+                        continue
+
+                    # Normal text streaming
+                    disp  = re.sub(r'\[output-search\][^\[]*$', '', raw_response)
+                    disp  = _strip_tags(disp)
+                    inner = build_streaming_html(raw_response)
+                    search_html = "".join(_search_segment_html(s["query"], s.get("results","")) for s in search_segs)
                     stream_ph.markdown(
-                        f'<div class="row-ai"><div class="bubble bub-ai">{inner}</div></div>',
+                        f'<div class="row-ai"><div class="bubble bub-ai">{search_html}{inner}</div></div>',
                         unsafe_allow_html=True,
                     )
+
             except Exception as e:
                 think_ph.empty()
                 raw_response = f"[Connection error: {e}]"
@@ -1058,25 +1120,43 @@ def render_chat():
                 )
                 st.session_state.messages.append({"role":"assistant","content":raw_response,"segments":[{"type":"text","content":raw_response}]})
                 return
+
             think_ph.empty()
-            search_queries = re.findall(r'\[output-search\](.*?)\[/output-search\]', raw_response, re.DOTALL)
-            if not search_queries or search_round >= MAX_SEARCH_ROUNDS:
+
+            # Check if this turn was a search turn
+            search_match = re.search(r'\[output-search\](.*?)\[/output-search\]', raw_response, re.DOTALL)
+            if not search_match or search_round >= MAX_SEARCH_ROUNDS:
+                # No search tag — this is the final answer turn, done.
                 break
-            search_block = ""
-            for q in search_queries:
-                q = q.strip()
-                stream_ph.markdown(
-                    f'<div class="row-ai"><div class="bubble bub-ai" style="opacity:.65;font-size:.8rem">'
-                    f'🔍 Searching: <em>{html_lib.escape(q)}</em>…</div></div>',
-                    unsafe_allow_html=True,
-                )
-                results = web_search(q)
-                search_block += f"[input-search]\nQuery: {q}\n{results}\n[/input-search]\n"
+
+            # It's a search turn — execute the search and loop back
+            query = search_match.group(1).strip()
+
+            # Show spinner while searching
+            spinner_html = _search_segment_html(query, in_progress=True)
+            search_html  = "".join(_search_segment_html(s["query"], s.get("results","")) for s in search_segs)
+            stream_ph.markdown(
+                f'<div class="row-ai"><div class="bubble bub-ai">{search_html}{spinner_html}</div></div>',
+                unsafe_allow_html=True,
+            )
+
+            results = web_search(query)
+
+            # Store completed search widget
+            search_segs.append({"query": query, "results": results})
+            search_html = "".join(_search_segment_html(s["query"], s.get("results","")) for s in search_segs)
+            stream_ph.markdown(
+                f'<div class="row-ai"><div class="bubble bub-ai">{search_html}</div></div>',
+                unsafe_allow_html=True,
+            )
+
+            # Append to conversation: AI's search-only turn + system's results turn
             ollama_msgs.append({"role": "assistant", "content": raw_response})
-            ollama_msgs.append({"role": "user",      "content": search_block})
+            ollama_msgs.append({"role": "user",      "content": f"[input-search]\n{results}\n[/input-search]"})
             think_ph.markdown(_thinking_html(), unsafe_allow_html=True)
 
-        segs  = parse_output(raw_response)
+        # Final render — prepend any search widgets above the answer
+        segs  = search_segs + parse_output(raw_response)
         inner = _segments_to_html(segs)
         stream_ph.markdown(
             f'<div class="row-ai"><div class="bubble bub-ai">{inner}</div></div>',
