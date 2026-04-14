@@ -82,10 +82,20 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
-# ── Custom favicon (diamond logo) ───────────────────────────────────────────
-_FAVICON_B64 = "/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1BST0ZJTEUAAQEAAAHIAAAAAAQwAABtbnRyUkdCIFhZWiAH4AABAAEAAAAAAABhY3NwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAA9tYAAQAAAADTLQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAlkZXNjAAAA8AAAACRyWFlaAAABFAAAABRnWFlaAAABKAAAABRiWFlaAAABPAAAABR3dHB0AAABUAAAABRyVFJDAAABZAAAAChnVFJDAAABZAAAAChiVFJDAAABZAAAAChjcHJ0AAABjAAAADxtbHVjAAAAAAAAAAEAAAAMZW5VUwAAAAgAAAAcAHMAUgBHAEJYWVogAAAAAAAAb6IAADj1AAADkFhZWiAAAAAAAABimQAAt4UAABjaWFlaIAAAAAAAACSgAAAPhAAAts9YWVogAAAAAAAA9tYAAQAAAADTLXBhcmEAAAAAAAQAAAACZmYAAPKnAAANWQAAE9AAAApbAAAAAAAAAABtbHVjAAAAAAAAAAEAAAAMZW5VUwAAACAAAAAcAEcAbwBvAGcAbABlACAASQBuAGMALgAgADIAMAAxADb/2wBDAAUDBAQEAwUEBAQFBQUGBwwIBwcHBw8LCwkMEQ8SEhEPERETFhwXExQaFRERGCEYGh0dHx8fExciJCIeJBweHx7/2wBDAQUFBQcGBw4ICA4eFBEUHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh7/wAARCAA3AEEDASIAAhEBAxEB/8QAHAABAAEFAQEAAAAAAAAAAAAAAAIDBAUGCAEH/8QALBAAAQQBAgYABgIDAAAAAAAAAQACAwQFBhEHEiExQVETUmFxgbEi0kKR8f/EABsBAAEFAQEAAAAAAAAAAAAAAAEAAgMEBwUG/8QAKBEAAQQBAgUDBQAAAAAAAAAAAQACAxEEBVEGEiExQWGBwRMUcaHR/9oADAMBAAIRAxEAPwDj1ERNUKKXgfZRUz2H2SQXiLY9FaLzurpLAxMDPh12Fz5ZXcrObbowH5j/AN2WCu1bFK5LTtwvgsQvLJI3jZzSO4IQsE0oGZUL5XQtcC5tWL6i91TaFVa1RaFWjbuiU9xpR5UVxyIgoudY3c+ym59leIirKkCd+5W3cN9E5HWWVEURfBj4SDatEdGj5W+3H1+SrXhvpSXWGpI8W21HWia0yzvc4cwYCN+Vvk9fx3K6mwmLx2BxMOLxddsFaEbNaO5PlxPknyVBNLydB3XjOKuJxpjft4OspHs0b/nYe59WFxePwOJhxeLrtgrQjZoHcny4nyT5K0fixoSvqmsb9EMgy8Tf4v7CcD/B319H8du29zSLH2p9t1Sa4g2FlmBl5ONkjJjcee7vfe978rk6xBZqWpKtqOSGeJxa9jxsWkeCqsJPsr7RxN0rVz1d1+AxwZGFm/xCdmyNHhx/R8fbt8Xh6Hb0ugx4eLW0aXqsepQfUApw7jY/xV+vs/7Re7oirqwiIieukrjG3bWOvQ3qM769mFwfHIw7FpXSHDPiBW1ZQFa0WQZeFm8sQ6CQfOz6ex4XM6uaVuzQtw3Kcz4LER5o5GHYtKjkjDwuBr2gwavDTujx2d8H0XW1qfYHqsTdtNY1z3uDWtG5JOwA9rUdEa7r6hx5juOjr5CBm8zSdmvA7vb9PY8LQeI+tn5aR+MxkhbQadpJB0Mx/r+1VbESaWeafw1lSZRx3trl7nwB834VTiJrV2WlfjMZIW0WnaSQdDMf6/tafCVaNKrRu2VxrQ0UFqONgxYcIiiFAfv1KvOZFQ50ST+RY5EROV5FLwPsiJIL0Eg7gkeOi8REklJp8Ko0oiSaVPmREQTKC//Z"
+# ── Custom SVG favicon ────────────────────────────────────────────────────────
+_FAVICON_SVG = (
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">'
+    '<defs><linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%">'
+    '<stop offset="0%" stop-color="#00ff88"/>'
+    '<stop offset="50%" stop-color="#00cc6a"/>'
+    '<stop offset="100%" stop-color="#004433" stop-opacity="0.9"/>'
+    '</linearGradient></defs>'
+    '<polygon points="16,1 31,16 16,31 1,16" fill="url(#g)"/>'
+    '</svg>'
+)
+_FAVICON_B64 = base64.b64encode(_FAVICON_SVG.encode()).decode()
 st.markdown(
-    f'<link rel="icon" type="image/jpeg" href="data:image/jpeg;base64,{_FAVICON_B64}">',
+    f'<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,{_FAVICON_B64}">',
     unsafe_allow_html=True,
 )
 
@@ -182,6 +192,7 @@ def build_user_content(text: str, file_info) -> str:
 
 def _strip_tags(s: str) -> str:
     s = re.sub(r'\[/?output-text\]', '', s)
+    s = re.sub(r'\[/?output-assistant\]', '', s)
     s = re.sub(r'\[/?input-[^\]]+\]', '', s)
     s = re.sub(r'\[output-file-[^\]]+\]', '', s)
     s = re.sub(r'\[/output-file-[^\]]+\]', '', s)
@@ -583,14 +594,36 @@ html, body, [data-testid="stAppViewContainer"] {
 
 /* ── Chat input widget ── */
 [data-testid="stChatInputContainer"] { background:transparent !important; border:none !important; padding:0 !important; }
-[data-testid="stChatInput"] {
-    background:rgba(4,14,8,0.92) !important; border:1px solid var(--glass-bdr) !important;
+[data-testid="stChatInput"],
+[data-testid="stChatInput"]:focus,
+[data-testid="stChatInput"]:focus-within,
+[data-testid="stChatInput"]:focus-visible,
+[data-testid="stChatInput"][data-focused="true"],
+[data-testid="stChatInputContainer"] > div,
+[data-testid="stChatInputContainer"] > div:focus-within {
+    background:rgba(4,14,8,0.92) !important;
+    border:1px solid var(--glass-bdr) !important;
+    border-color: rgba(0,255,136,0.14) !important;
+    outline: none !important;
+    box-shadow: none !important;
     border-radius:11px !important; color:var(--text) !important;
     font-family:var(--mono) !important; transition:border-color .2s, box-shadow .2s;
 }
 [data-testid="stChatInput"]:focus-within {
     border-color:rgba(0,255,136,0.4) !important;
     box-shadow:0 0 18px rgba(0,255,136,0.1) !important;
+}
+/* Kill any red/orange error borders Streamlit injects */
+[data-testid="stChatInputContainer"] *,
+[data-testid="stChatInput"] * {
+    outline: none !important;
+    box-shadow: none !important;
+}
+[data-baseweb="textarea"],
+[data-baseweb="base-input"] {
+    border-color: rgba(0,255,136,0.14) !important;
+    box-shadow: none !important;
+    outline: none !important;
 }
 [data-testid="stChatInput"] textarea { color:var(--text) !important; font-family:var(--mono) !important; font-size:.87rem !important; }
 [data-testid="stChatInput"] button { color:var(--green) !important; }
@@ -888,7 +921,7 @@ def render_home():
         if st.button("⟳  Refresh Status", use_container_width=True):
             st.session_state.model_status = {}; st.rerun()
 
-    st.markdown('<div class="hm-footer">SPARTAN AI &nbsp;&middot;&nbsp; <span style="color:var(--green);opacity:.8">v1.0.0</span> &nbsp;&middot;&nbsp; dgeurts &nbsp;&middot;&nbsp; <span style="opacity:.4">Streamlit &amp; Ollama</span></div>', unsafe_allow_html=True)
+    st.markdown('<div class="hm-footer">SPARTAN AI &nbsp;&middot;&nbsp; <span style="color:var(--green);opacity:.8">v1.0.1</span> &nbsp;&middot;&nbsp; dgeurts &nbsp;&middot;&nbsp; <span style="opacity:.4">Streamlit &amp; Ollama</span></div>', unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
 
@@ -966,7 +999,7 @@ def render_chat():
                 st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
 
-    # Hidden proxy buttons in sidebar (sidebar is CSS-hidden; JS clicks them by text)
+    # Hidden proxy buttons in sidebar (sidebar is CSS-hidden; JS clicks by text)
     with st.sidebar:
         if st.button("__home__", key="btn_home"):  go_home(); st.rerun()
         if st.button("__new__",  key="btn_new"):   new_chat(); st.rerun()
