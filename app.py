@@ -82,20 +82,10 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
-# ── Custom SVG favicon ────────────────────────────────────────────────────────
-_FAVICON_SVG = (
-    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">'
-    '<defs><linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%">'
-    '<stop offset="0%" stop-color="#00ff88"/>'
-    '<stop offset="50%" stop-color="#00cc6a"/>'
-    '<stop offset="100%" stop-color="#004433" stop-opacity="0.9"/>'
-    '</linearGradient></defs>'
-    '<polygon points="16,1 31,16 16,31 1,16" fill="url(#g)"/>'
-    '</svg>'
-)
-_FAVICON_B64 = base64.b64encode(_FAVICON_SVG.encode()).decode()
+# ── Custom favicon (diamond logo) ───────────────────────────────────────────
+_FAVICON_B64 = "/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1BST0ZJTEUAAQEAAAHIAAAAAAQwAABtbnRyUkdCIFhZWiAH4AABAAEAAAAAAABhY3NwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAA9tYAAQAAAADTLQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAlkZXNjAAAA8AAAACRyWFlaAAABFAAAABRnWFlaAAABKAAAABRiWFlaAAABPAAAABR3dHB0AAABUAAAABRyVFJDAAABZAAAAChnVFJDAAABZAAAAChiVFJDAAABZAAAAChjcHJ0AAABjAAAADxtbHVjAAAAAAAAAAEAAAAMZW5VUwAAAAgAAAAcAHMAUgBHAEJYWVogAAAAAAAAb6IAADj1AAADkFhZWiAAAAAAAABimQAAt4UAABjaWFlaIAAAAAAAACSgAAAPhAAAts9YWVogAAAAAAAA9tYAAQAAAADTLXBhcmEAAAAAAAQAAAACZmYAAPKnAAANWQAAE9AAAApbAAAAAAAAAABtbHVjAAAAAAAAAAEAAAAMZW5VUwAAACAAAAAcAEcAbwBvAGcAbABlACAASQBuAGMALgAgADIAMAAxADb/2wBDAAUDBAQEAwUEBAQFBQUGBwwIBwcHBw8LCwkMEQ8SEhEPERETFhwXExQaFRERGCEYGh0dHx8fExciJCIeJBweHx7/2wBDAQUFBQcGBw4ICA4eFBEUHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh7/wAARCAA3AEEDASIAAhEBAxEB/8QAHAABAAEFAQEAAAAAAAAAAAAAAAIDBAUGCAEH/8QALBAAAQQBAgYABgIDAAAAAAAAAQACAwQFBhEHEiExQVETUmFxgbEi0kKR8f/EABsBAAEFAQEAAAAAAAAAAAAAAAEAAgMEBwUG/8QAKBEAAQQBAgUDBQAAAAAAAAAAAQACAxEEBVEGEiExQWGBwRMUcaHR/9oADAMBAAIRAxEAPwDj1ERNUKKXgfZRUz2H2SQXiLY9FaLzurpLAxMDPh12Fz5ZXcrObbowH5j/AN2WCu1bFK5LTtwvgsQvLJI3jZzSO4IQsE0oGZUL5XQtcC5tWL6i91TaFVa1RaFWjbuiU9xpR5UVxyIgoudY3c+ym59leIirKkCd+5W3cN9E5HWWVEURfBj4SDatEdGj5W+3H1+SrXhvpSXWGpI8W21HWia0yzvc4cwYCN+Vvk9fx3K6mwmLx2BxMOLxddsFaEbNaO5PlxPknyVBNLydB3XjOKuJxpjft4OspHs0b/nYe59WFxePwOJhxeLrtgrQjZoHcny4nyT5K0fixoSvqmsb9EMgy8Tf4v7CcD/B319H8du29zSLH2p9t1Sa4g2FlmBl5ONkjJjcee7vfe978rk6xBZqWpKtqOSGeJxa9jxsWkeCqsJPsr7RxN0rVz1d1+AxwZGFm/xCdmyNHhx/R8fbt8Xh6Hb0ugx4eLW0aXqsepQfUApw7jY/xV+vs/7Re7oirqwiIieukrjG3bWOvQ3qM769mFwfHIw7FpXSHDPiBW1ZQFa0WQZeFm8sQ6CQfOz6ex4XM6uaVuzQtw3Kcz4LER5o5GHYtKjkjDwuBr2gwavDTujx2d8H0XW1qfYHqsTdtNY1z3uDWtG5JOwA9rUdEa7r6hx5juOjr5CBm8zSdmvA7vb9PY8LQeI+tn5aR+MxkhbQadpJB0Mx/r+1VbESaWeafw1lSZRx3trl7nwB834VTiJrV2WlfjMZIW0WnaSQdDMf6/tafCVaNKrRu2VxrQ0UFqONgxYcIiiFAfv1KvOZFQ50ST+RY5EROV5FLwPsiJIL0Eg7gkeOi8REklJp8Ko0oiSaVPmREQTKC//Z"
 st.markdown(
-    f'<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,{_FAVICON_B64}">',
+    f'<link rel="icon" type="image/jpeg" href="data:image/jpeg;base64,{_FAVICON_B64}">',
     unsafe_allow_html=True,
 )
 
@@ -740,28 +730,6 @@ details.file-details .copy-btn.copied { background:rgba(0,255,136,0.18) !importa
 /* Generating spinner */
 @keyframes spin { to{transform:rotate(360deg)} }
 .gen-spin { display:inline-block; width:10px; height:10px; flex-shrink:0; border:2px solid rgba(0,255,136,0.18); border-top-color:var(--green); border-radius:50%; animation:spin .75s linear infinite; }
-
-/* Hide proxy nav buttons via CSS immediately — no JS flash */
-[data-testid="stButton-btn_home"],
-[data-testid="stButton-btn_new"],
-[data-testid="stButton-toggle_up"],
-div:has(> button[kind="secondary"]#btn_home),
-div:has(> button[kind="secondary"]#btn_new),
-div:has(> button[kind="secondary"]#toggle_up) {
-    display: none !important;
-    visibility: hidden !important;
-    height: 0 !important;
-    overflow: hidden !important;
-    margin: 0 !important;
-    padding: 0 !important;
-    position: absolute !important;
-}
-/* Broader fallback: hide the stButton wrapper when it contains a proxy button */
-.stButton:has(button[data-testid="btn_home"]),
-.stButton:has(button[data-testid="btn_new"]),
-.stButton:has(button[data-testid="toggle_up"]) {
-    display: none !important;
-}
 </style>
 <script>
 (function() {
@@ -998,11 +966,12 @@ def render_chat():
                 st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
 
-    # Hidden Streamlit buttons — clicked by JS proxy buttons inside stBottom
-    if st.button("__home__", key="btn_home"):  go_home(); st.rerun()
-    if st.button("__new__",  key="btn_new"):   new_chat(); st.rerun()
-    if st.button("__up__",   key="toggle_up"):
-        st.session_state.show_upload = not st.session_state.show_upload; st.rerun()
+    # Hidden proxy buttons in sidebar (sidebar is CSS-hidden; JS clicks them by text)
+    with st.sidebar:
+        if st.button("__home__", key="btn_home"):  go_home(); st.rerun()
+        if st.button("__new__",  key="btn_new"):   new_chat(); st.rerun()
+        if st.button("__up__",   key="toggle_up"):
+            st.session_state.show_upload = not st.session_state.show_upload; st.rerun()
 
     user_input = st.chat_input("Message Spartan AI\u2026", key="chat_input")
 
