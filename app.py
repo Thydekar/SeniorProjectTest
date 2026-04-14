@@ -798,10 +798,12 @@ details.file-details .copy-btn.copied { background:rgba(0,255,136,0.18) !importa
       labelSpan.textContent = d.label;
       btn.appendChild(iconSpan);
       btn.appendChild(labelSpan);
-      btn.addEventListener("click", function(e) {
-        e.preventDefault(); e.stopPropagation();
-        clickProxy(d.proxy);
-      });
+      (function(proxy) {
+        btn.addEventListener("click", function(e) {
+          e.preventDefault(); e.stopPropagation();
+          clickProxy(proxy);
+        });
+      })(d.proxy);
       nav.appendChild(btn);
     });
     document.body.appendChild(nav);
