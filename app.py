@@ -745,26 +745,23 @@ details.file-details .copy-btn.copied { background:rgba(0,255,136,0.18) !importa
 (function() {
   var PROXIES = ["__home__", "__new__", "__up__"];
   var BTNS = [
-    { icon: "🏠", label: "Home",     proxy: "__home__" },
-    { icon: "✨",     label: "New Chat",  proxy: "__new__"  },
-    { icon: "📎", label: "Attach",    proxy: "__up__"   }
+    { icon: "🏠", label: "Home",    proxy: "__home__" },
+    { icon: "✨",     label: "New Chat", proxy: "__new__"  },
+    { icon: "📎", label: "Attach",   proxy: "__up__"   }
   ];
 
-  // Hide a proxy button and ALL its ancestors up to stMain
-  // Uses every possible hiding technique so nothing leaks through
   function nukeElement(el) {
     while (el && el !== document.body) {
-      el.style.setProperty("display",         "none",     "important");
-      el.style.setProperty("visibility",      "hidden",   "important");
-      el.style.setProperty("opacity",         "0",        "important");
-      el.style.setProperty("pointer-events",  "none",     "important");
-      el.style.setProperty("position",        "absolute", "important");
-      el.style.setProperty("width",           "0",        "important");
-      el.style.setProperty("height",          "0",        "important");
-      el.style.setProperty("overflow",        "hidden",   "important");
-      el.style.setProperty("margin",          "0",        "important");
-      el.style.setProperty("padding",         "0",        "important");
-      // Stop at stButton wrapper - that contains the full Streamlit button component
+      el.style.setProperty("display",        "none",     "important");
+      el.style.setProperty("visibility",     "hidden",   "important");
+      el.style.setProperty("opacity",        "0",        "important");
+      el.style.setProperty("pointer-events", "none",     "important");
+      el.style.setProperty("position",       "absolute", "important");
+      el.style.setProperty("width",          "0",        "important");
+      el.style.setProperty("height",         "0",        "important");
+      el.style.setProperty("overflow",       "hidden",   "important");
+      el.style.setProperty("margin",         "0",        "important");
+      el.style.setProperty("padding",        "0",        "important");
       if (el.className && String(el.className).indexOf("stButton") !== -1) break;
       el = el.parentElement;
     }
@@ -772,13 +769,10 @@ details.file-details .copy-btn.copied { background:rgba(0,255,136,0.18) !importa
 
   function hideProxies() {
     document.querySelectorAll("button").forEach(function(b) {
-      if (PROXIES.indexOf(b.textContent.trim()) !== -1) {
-        nukeElement(b);
-      }
+      if (PROXIES.indexOf(b.textContent.trim()) !== -1) nukeElement(b);
     });
   }
 
-  // Click proxy using dispatchEvent - never un-hides the element
   function clickProxy(proxy) {
     var all = document.querySelectorAll("button");
     for (var i = 0; i < all.length; i++) {
@@ -789,8 +783,6 @@ details.file-details .copy-btn.copied { background:rgba(0,255,136,0.18) !importa
     }
   }
 
-  // Build the nav bar and append directly to document.body
-  // Streamlit never touches body children it didn't create, so this persists across reruns
   function inject() {
     if (document.getElementById("spartan-nav")) return;
     var nav = document.createElement("div");
@@ -818,11 +810,9 @@ details.file-details .copy-btn.copied { background:rgba(0,255,136,0.18) !importa
   function tick() { inject(); hideProxies(); }
   tick();
   new MutationObserver(function(muts) {
-    var added = false;
     for (var i = 0; i < muts.length; i++) {
-      if (muts[i].addedNodes.length) { added = true; break; }
+      if (muts[i].addedNodes.length) { tick(); break; }
     }
-    if (added) tick();
   }).observe(document.body, { childList: true, subtree: true });
 })();
 </script>
