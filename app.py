@@ -740,6 +740,28 @@ details.file-details .copy-btn.copied { background:rgba(0,255,136,0.18) !importa
 /* Generating spinner */
 @keyframes spin { to{transform:rotate(360deg)} }
 .gen-spin { display:inline-block; width:10px; height:10px; flex-shrink:0; border:2px solid rgba(0,255,136,0.18); border-top-color:var(--green); border-radius:50%; animation:spin .75s linear infinite; }
+
+/* Hide proxy nav buttons via CSS immediately — no JS flash */
+[data-testid="stButton-btn_home"],
+[data-testid="stButton-btn_new"],
+[data-testid="stButton-toggle_up"],
+div:has(> button[kind="secondary"]#btn_home),
+div:has(> button[kind="secondary"]#btn_new),
+div:has(> button[kind="secondary"]#toggle_up) {
+    display: none !important;
+    visibility: hidden !important;
+    height: 0 !important;
+    overflow: hidden !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    position: absolute !important;
+}
+/* Broader fallback: hide the stButton wrapper when it contains a proxy button */
+.stButton:has(button[data-testid="btn_home"]),
+.stButton:has(button[data-testid="btn_new"]),
+.stButton:has(button[data-testid="toggle_up"]) {
+    display: none !important;
+}
 </style>
 <script>
 (function() {
@@ -762,8 +784,9 @@ details.file-details .copy-btn.copied { background:rgba(0,255,136,0.18) !importa
       el.style.setProperty("overflow",       "hidden",   "important");
       el.style.setProperty("margin",         "0",        "important");
       el.style.setProperty("padding",        "0",        "important");
-      if (el.className && String(el.className).indexOf("stButton") !== -1) break;
+      var isStBtn = el.className && String(el.className).indexOf("stButton") !== -1;
       el = el.parentElement;
+      if (isStBtn) break;
     }
   }
 
