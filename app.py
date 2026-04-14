@@ -531,11 +531,6 @@ html, body, [data-testid="stAppViewContainer"] {
 ::-webkit-scrollbar-track { background:transparent; }
 ::-webkit-scrollbar-thumb { background:rgba(0,255,136,0.16); border-radius:2px; }
 
-/* Proxy nav buttons: fully removed from document flow */
-.stButton:has(button[kind="secondary"]) {
-    display: none !important;
-}
-
 /* stBottom: fixed at bottom, tall enough for input + nav row */
 [data-testid="stBottom"] {
     position: fixed !important;
@@ -750,14 +745,15 @@ details.file-details .copy-btn.copied { background:rgba(0,255,136,0.18) !importa
     { svg: "<svg width=\"14\" height=\"14\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48\"/></svg>", label: "Attach",   proxy: "__up__"   },
   ];
 
-  // Fully remove proxy buttons from the page
+  // Fully remove proxy buttons from document flow
   function hideProxies() {
     document.querySelectorAll("button").forEach(function(b) {
       if (PROXIES.indexOf(b.textContent.trim()) !== -1) {
-        var el = b;
+        b.style.cssText = "display:none!important;";
+        var el = b.parentElement;
         while (el && el !== document.body) {
           if (el.classList && el.classList.contains("stButton")) {
-            el.style.display = "none";
+            el.style.cssText = "display:none!important;width:0!important;height:0!important;overflow:hidden!important;position:absolute!important;pointer-events:none!important;";
             break;
           }
           el = el.parentElement;
