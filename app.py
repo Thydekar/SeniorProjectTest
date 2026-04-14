@@ -531,7 +531,7 @@ html, body, [data-testid="stAppViewContainer"] {
 ::-webkit-scrollbar-track { background:transparent; }
 ::-webkit-scrollbar-thumb { background:rgba(0,255,136,0.16); border-radius:2px; }
 
-/* stBottom: sits above the nav bar */
+/* stBottom: raised to sit above the nav bar */
 [data-testid="stBottom"] {
     position: fixed !important;
     bottom: 48px !important; left: 0 !important; right: 0 !important;
@@ -549,7 +549,7 @@ html, body, [data-testid="stAppViewContainer"] {
     padding: 0 !important; box-shadow: none !important;
 }
 
-/* Nav bar: fully independent, appended to body by JS */
+/* Nav bar: appended to body by JS, fully outside Streamlit DOM */
 #spartan-nav {
     position: fixed !important;
     bottom: 0 !important; left: 0 !important; right: 0 !important;
@@ -561,7 +561,7 @@ html, body, [data-testid="stAppViewContainer"] {
     justify-content: center !important;
     gap: 12px !important;
     background: rgba(1,8,4,0.99) !important;
-    border-top: 1px solid rgba(0,255,136,0.12) !important;
+    border-top: 1px solid rgba(0,255,136,0.14) !important;
     padding: 0 20px !important;
     box-sizing: border-box !important;
 }
@@ -619,7 +619,7 @@ html, body, [data-testid="stAppViewContainer"] {
 }
 .stButton > button:active { transform:scale(0.97) !important; }
 
-/* ── Attach / pending strip (slides in above both fixed bars) ── */
+/* ── Attach / pending strip (slides in just above the bar) ── */
 .attach-bar {
     position: fixed; bottom: 136px; left: 0; right: 0;
     z-index: 148;
@@ -675,7 +675,7 @@ hr.div { border:none; border-top:1px solid var(--glass-bdr); margin:2rem 0 1.6re
 .hdr-title { font-family:var(--mono); font-size:0.92rem; color:var(--green); text-shadow:0 0 10px rgba(0,255,136,0.4); flex:1; }
 .hdr-status { display:flex; align-items:center; gap:5px; font-family:var(--mono); font-size:0.68rem; }
 
-/* ── Messages: enough bottom padding to fully clear both fixed bars ── */
+/* ── Messages: enough bottom padding to fully clear the fixed bar ── */
 .msgs { padding: 1rem 0 140px; }
 
 /* ── Chat bubbles: max-width cap + breathing room on both sides ── */
@@ -750,32 +750,47 @@ details.file-details .copy-btn.copied { background:rgba(0,255,136,0.18) !importa
     { icon: "📎", label: "Attach",    proxy: "__up__"   }
   ];
 
+  // Hide a proxy button and ALL its ancestors up to stMain
+  // Uses every possible hiding technique so nothing leaks through
+  function nukeElement(el) {
+    while (el && el !== document.body) {
+      el.style.setProperty("display",         "none",     "important");
+      el.style.setProperty("visibility",      "hidden",   "important");
+      el.style.setProperty("opacity",         "0",        "important");
+      el.style.setProperty("pointer-events",  "none",     "important");
+      el.style.setProperty("position",        "absolute", "important");
+      el.style.setProperty("width",           "0",        "important");
+      el.style.setProperty("height",          "0",        "important");
+      el.style.setProperty("overflow",        "hidden",   "important");
+      el.style.setProperty("margin",          "0",        "important");
+      el.style.setProperty("padding",         "0",        "important");
+      // Stop at stButton wrapper - that contains the full Streamlit button component
+      if (el.className && String(el.className).indexOf("stButton") !== -1) break;
+      el = el.parentElement;
+    }
+  }
+
   function hideProxies() {
     document.querySelectorAll("button").forEach(function(b) {
-      if (PROXIES.indexOf(b.textContent.trim()) === -1) return;
-      var el = b;
-      while (el && el !== document.body) {
-        el.style.setProperty("display",    "none",    "important");
-        el.style.setProperty("visibility", "hidden",  "important");
-        el.style.setProperty("height",     "0",       "important");
-        el.style.setProperty("overflow",   "hidden",  "important");
-        if (el.className && String(el.className).indexOf("stButton") !== -1) break;
-        el = el.parentElement;
+      if (PROXIES.indexOf(b.textContent.trim()) !== -1) {
+        nukeElement(b);
       }
     });
   }
 
+  // Click proxy using dispatchEvent - never un-hides the element
   function clickProxy(proxy) {
     var all = document.querySelectorAll("button");
     for (var i = 0; i < all.length; i++) {
       if (all[i].textContent.trim() === proxy) {
-        all[i].style.removeProperty("display");
-        all[i].click();
+        all[i].dispatchEvent(new MouseEvent("click", {bubbles: true, cancelable: true}));
         return;
       }
     }
   }
 
+  // Build the nav bar and append directly to document.body
+  // Streamlit never touches body children it didn't create, so this persists across reruns
   function inject() {
     if (document.getElementById("spartan-nav")) return;
     var nav = document.createElement("div");
@@ -783,7 +798,14 @@ details.file-details .copy-btn.copied { background:rgba(0,255,136,0.18) !importa
     BTNS.forEach(function(d) {
       var btn = document.createElement("button");
       btn.type = "button";
-      btn.innerHTML = "<span>" + d.icon + "</span><span>" + d.label + "</span>";
+      var iconSpan = document.createElement("span");
+      iconSpan.textContent = d.icon;
+      iconSpan.style.fontSize = "1.05rem";
+      iconSpan.style.lineHeight = "1";
+      var labelSpan = document.createElement("span");
+      labelSpan.textContent = d.label;
+      btn.appendChild(iconSpan);
+      btn.appendChild(labelSpan);
       btn.addEventListener("click", function(e) {
         e.preventDefault(); e.stopPropagation();
         clickProxy(d.proxy);
@@ -796,9 +818,11 @@ details.file-details .copy-btn.copied { background:rgba(0,255,136,0.18) !importa
   function tick() { inject(); hideProxies(); }
   tick();
   new MutationObserver(function(muts) {
+    var added = false;
     for (var i = 0; i < muts.length; i++) {
-      if (muts[i].addedNodes.length) { tick(); break; }
+      if (muts[i].addedNodes.length) { added = true; break; }
     }
+    if (added) tick();
   }).observe(document.body, { childList: true, subtree: true });
 })();
 </script>
