@@ -531,10 +531,10 @@ html, body, [data-testid="stAppViewContainer"] {
 ::-webkit-scrollbar-track { background:transparent; }
 ::-webkit-scrollbar-thumb { background:rgba(0,255,136,0.16); border-radius:2px; }
 
-/* ── stBottom: push up to sit above the nav bar ── */
+/* stBottom: sits above the nav bar */
 [data-testid="stBottom"] {
     position: fixed !important;
-    bottom: 46px !important; left: 0 !important; right: 0 !important;
+    bottom: 48px !important; left: 0 !important; right: 0 !important;
     z-index: 150 !important;
     background: rgba(2,10,5,0.97) !important;
     border-top: 1px solid var(--glass-bdr) !important;
@@ -549,34 +549,34 @@ html, body, [data-testid="stAppViewContainer"] {
     padding: 0 !important; box-shadow: none !important;
 }
 
-/* ── Nav bar: completely independent fixed bar below the input ── */
+/* Nav bar: fully independent, appended to body by JS */
 #spartan-nav {
     position: fixed !important;
     bottom: 0 !important; left: 0 !important; right: 0 !important;
-    height: 46px !important;
+    height: 48px !important;
     z-index: 160 !important;
     display: flex !important;
     flex-direction: row !important;
     align-items: center !important;
     justify-content: center !important;
-    gap: 10px !important;
-    background: rgba(2,10,5,0.98) !important;
-    border-top: 1px solid rgba(0,255,136,0.10) !important;
-    padding: 0 16px !important;
+    gap: 12px !important;
+    background: rgba(1,8,4,0.99) !important;
+    border-top: 1px solid rgba(0,255,136,0.12) !important;
+    padding: 0 20px !important;
     box-sizing: border-box !important;
 }
 #spartan-nav button {
     display: inline-flex !important;
     align-items: center !important;
     justify-content: center !important;
-    gap: 6px !important;
-    height: 30px !important;
-    padding: 0 16px !important;
-    border-radius: 7px !important;
+    gap: 7px !important;
+    height: 32px !important;
+    padding: 0 18px !important;
+    border-radius: 8px !important;
     background: rgba(0,255,136,0.05) !important;
     color: #00ff88 !important;
-    border: 1px solid rgba(0,255,136,0.22) !important;
-    font-size: 0.72rem !important;
+    border: 1px solid rgba(0,255,136,0.25) !important;
+    font-size: 0.75rem !important;
     font-family: 'Share Tech Mono', monospace !important;
     letter-spacing: 0.05em !important;
     cursor: pointer !important;
@@ -585,9 +585,9 @@ html, body, [data-testid="stAppViewContainer"] {
     flex-shrink: 0 !important;
 }
 #spartan-nav button:hover {
-    background: rgba(0,255,136,0.13) !important;
+    background: rgba(0,255,136,0.14) !important;
     border-color: #00ff88 !important;
-    box-shadow: 0 0 12px rgba(0,255,136,0.2) !important;
+    box-shadow: 0 0 14px rgba(0,255,136,0.22) !important;
 }
 #spartan-nav button:active { transform: scale(0.95) !important; }
 
@@ -619,9 +619,9 @@ html, body, [data-testid="stAppViewContainer"] {
 }
 .stButton > button:active { transform:scale(0.97) !important; }
 
-/* ── Attach / pending strip (slides in just above both bars) ── */
+/* ── Attach / pending strip (slides in above both fixed bars) ── */
 .attach-bar {
-    position: fixed; bottom: 130px; left: 0; right: 0;
+    position: fixed; bottom: 136px; left: 0; right: 0;
     z-index: 148;
     background: rgba(2,10,5,0.96);
     border-top: 1px solid rgba(0,255,136,0.08);
@@ -675,8 +675,8 @@ hr.div { border:none; border-top:1px solid var(--glass-bdr); margin:2rem 0 1.6re
 .hdr-title { font-family:var(--mono); font-size:0.92rem; color:var(--green); text-shadow:0 0 10px rgba(0,255,136,0.4); flex:1; }
 .hdr-status { display:flex; align-items:center; gap:5px; font-family:var(--mono); font-size:0.68rem; }
 
-/* ── Messages: enough bottom padding to fully clear the fixed bar ── */
-.msgs { padding: 1rem 0 135px; }
+/* ── Messages: enough bottom padding to fully clear both fixed bars ── */
+.msgs { padding: 1rem 0 140px; }
 
 /* ── Chat bubbles: max-width cap + breathing room on both sides ── */
 .row-user {
@@ -745,41 +745,37 @@ details.file-details .copy-btn.copied { background:rgba(0,255,136,0.18) !importa
 (function() {
   var PROXIES = ["__home__", "__new__", "__up__"];
   var BTNS = [
-    { emoji: "\U0001F3E0", label: "Home",      proxy: "__home__" },
-    { emoji: "\u2728",     label: "New Chat",   proxy: "__new__"  },
-    { emoji: "\U0001F4CE", label: "Attach",     proxy: "__up__"   },
+    { icon: "🏠", label: "Home",     proxy: "__home__" },
+    { icon: "✨",     label: "New Chat",  proxy: "__new__"  },
+    { icon: "📎", label: "Attach",    proxy: "__up__"   }
   ];
 
-  /* ---------- hide proxy buttons completely ---------- */
   function hideProxies() {
     document.querySelectorAll("button").forEach(function(b) {
       if (PROXIES.indexOf(b.textContent.trim()) === -1) return;
-      b.style.cssText = "display:none!important;visibility:hidden!important;";
-      var el = b.parentElement;
+      var el = b;
       while (el && el !== document.body) {
-        if (el.hasAttribute && (el.hasAttribute("data-testid") || (el.className && el.className.indexOf("stButton") !== -1))) {
-          el.style.cssText = "display:none!important;visibility:hidden!important;width:0!important;height:0!important;overflow:hidden!important;position:absolute!important;pointer-events:none!important;";
-          break;
-        }
+        el.style.setProperty("display",    "none",    "important");
+        el.style.setProperty("visibility", "hidden",  "important");
+        el.style.setProperty("height",     "0",       "important");
+        el.style.setProperty("overflow",   "hidden",  "important");
+        if (el.className && String(el.className).indexOf("stButton") !== -1) break;
         el = el.parentElement;
       }
     });
   }
 
-  /* ---------- click a hidden proxy button ---------- */
   function clickProxy(proxy) {
     var all = document.querySelectorAll("button");
     for (var i = 0; i < all.length; i++) {
       if (all[i].textContent.trim() === proxy) {
-        // Temporarily restore so Streamlit can detect the click
-        all[i].style.cssText = "";
+        all[i].style.removeProperty("display");
         all[i].click();
         return;
       }
     }
   }
 
-  /* ---------- build & append the fixed nav bar ---------- */
   function inject() {
     if (document.getElementById("spartan-nav")) return;
     var nav = document.createElement("div");
@@ -787,8 +783,7 @@ details.file-details .copy-btn.copied { background:rgba(0,255,136,0.18) !importa
     BTNS.forEach(function(d) {
       var btn = document.createElement("button");
       btn.type = "button";
-      btn.innerHTML = "<span style='font-size:1rem;line-height:1'>" + d.emoji + "</span>"
-                    + "<span style='margin-left:5px'>" + d.label + "</span>";
+      btn.innerHTML = "<span>" + d.icon + "</span><span>" + d.label + "</span>";
       btn.addEventListener("click", function(e) {
         e.preventDefault(); e.stopPropagation();
         clickProxy(d.proxy);
