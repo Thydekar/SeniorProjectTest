@@ -531,60 +531,65 @@ html, body, [data-testid="stAppViewContainer"] {
 ::-webkit-scrollbar-track { background:transparent; }
 ::-webkit-scrollbar-thumb { background:rgba(0,255,136,0.16); border-radius:2px; }
 
-/* stBottom: fixed at bottom, tall enough for input + nav row */
+/* ── stBottom: push up to sit above the nav bar ── */
 [data-testid="stBottom"] {
     position: fixed !important;
-    bottom: 0 !important; left: 0 !important; right: 0 !important;
+    bottom: 46px !important; left: 0 !important; right: 0 !important;
     z-index: 150 !important;
     background: rgba(2,10,5,0.97) !important;
     border-top: 1px solid var(--glass-bdr) !important;
     backdrop-filter: blur(22px) !important;
     -webkit-backdrop-filter: blur(22px) !important;
     box-shadow: 0 -4px 24px rgba(0,0,0,0.5) !important;
-    padding: 8px 14px 4px !important;
+    padding: 8px 14px 6px !important;
     box-sizing: border-box !important;
 }
 [data-testid="stBottom"] > div {
     background: transparent !important; border: none !important;
     padding: 0 !important; box-shadow: none !important;
-    display: flex !important; flex-direction: column !important;
-    gap: 4px !important;
 }
 
+/* ── Nav bar: completely independent fixed bar below the input ── */
 #spartan-nav {
+    position: fixed !important;
+    bottom: 0 !important; left: 0 !important; right: 0 !important;
+    height: 46px !important;
+    z-index: 160 !important;
     display: flex !important;
     flex-direction: row !important;
     align-items: center !important;
-    justify-content: flex-start !important;
-    gap: 6px !important;
-    padding: 2px 2px 4px !important;
+    justify-content: center !important;
+    gap: 10px !important;
+    background: rgba(2,10,5,0.98) !important;
+    border-top: 1px solid rgba(0,255,136,0.10) !important;
+    padding: 0 16px !important;
+    box-sizing: border-box !important;
 }
 #spartan-nav button {
     display: inline-flex !important;
     align-items: center !important;
     justify-content: center !important;
-    gap: 5px !important;
-    height: 28px !important;
-    padding: 0 12px !important;
-    border-radius: 6px !important;
+    gap: 6px !important;
+    height: 30px !important;
+    padding: 0 16px !important;
+    border-radius: 7px !important;
     background: rgba(0,255,136,0.05) !important;
     color: #00ff88 !important;
     border: 1px solid rgba(0,255,136,0.22) !important;
-    font-size: 0.70rem !important;
+    font-size: 0.72rem !important;
     font-family: 'Share Tech Mono', monospace !important;
-    letter-spacing: 0.06em !important;
+    letter-spacing: 0.05em !important;
     cursor: pointer !important;
-    transition: background .15s, border-color .15s !important;
+    transition: background .15s, border-color .15s, box-shadow .15s !important;
     white-space: nowrap !important;
     flex-shrink: 0 !important;
 }
-#spartan-nav button svg { flex-shrink: 0 !important; }
 #spartan-nav button:hover {
     background: rgba(0,255,136,0.13) !important;
     border-color: #00ff88 !important;
-    box-shadow: 0 0 10px rgba(0,255,136,0.18) !important;
+    box-shadow: 0 0 12px rgba(0,255,136,0.2) !important;
 }
-#spartan-nav button:active { transform: scale(0.96) !important; }
+#spartan-nav button:active { transform: scale(0.95) !important; }
 
 /* ── Chat input widget ── */
 [data-testid="stChatInputContainer"] { background:transparent !important; border:none !important; padding:0 !important; }
@@ -614,9 +619,9 @@ html, body, [data-testid="stAppViewContainer"] {
 }
 .stButton > button:active { transform:scale(0.97) !important; }
 
-/* ── Attach / pending strip (slides in just above the bar) ── */
+/* ── Attach / pending strip (slides in just above both bars) ── */
 .attach-bar {
-    position: fixed; bottom: 100px; left: 0; right: 0;
+    position: fixed; bottom: 130px; left: 0; right: 0;
     z-index: 148;
     background: rgba(2,10,5,0.96);
     border-top: 1px solid rgba(0,255,136,0.08);
@@ -671,7 +676,7 @@ hr.div { border:none; border-top:1px solid var(--glass-bdr); margin:2rem 0 1.6re
 .hdr-status { display:flex; align-items:center; gap:5px; font-family:var(--mono); font-size:0.68rem; }
 
 /* ── Messages: enough bottom padding to fully clear the fixed bar ── */
-.msgs { padding: 1rem 0 105px; }
+.msgs { padding: 1rem 0 135px; }
 
 /* ── Chat bubbles: max-width cap + breathing room on both sides ── */
 .row-user {
@@ -740,65 +745,57 @@ details.file-details .copy-btn.copied { background:rgba(0,255,136,0.18) !importa
 (function() {
   var PROXIES = ["__home__", "__new__", "__up__"];
   var BTNS = [
-    { svg: "<svg width=\"14\" height=\"14\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M3 9.5L12 3l9 6.5V20a1 1 0 01-1 1H5a1 1 0 01-1-1V9.5z\"/><polyline points=\"9 22 9 12 15 12 15 22\"/></svg>", label: "Home",     proxy: "__home__" },
-    { svg: "<svg width=\"14\" height=\"14\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><polyline points=\"1 4 1 10 7 10\"/><path d=\"M3.51 15a9 9 0 102.13-9.36L1 10\"/></svg>", label: "New",      proxy: "__new__"  },
-    { svg: "<svg width=\"14\" height=\"14\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48\"/></svg>", label: "Attach",   proxy: "__up__"   },
+    { emoji: "\U0001F3E0", label: "Home",      proxy: "__home__" },
+    { emoji: "\u2728",     label: "New Chat",   proxy: "__new__"  },
+    { emoji: "\U0001F4CE", label: "Attach",     proxy: "__up__"   },
   ];
 
-  // Fully remove proxy buttons from document flow
+  /* ---------- hide proxy buttons completely ---------- */
   function hideProxies() {
     document.querySelectorAll("button").forEach(function(b) {
-      if (PROXIES.indexOf(b.textContent.trim()) !== -1) {
-        b.style.cssText = "display:none!important;";
-        var el = b.parentElement;
-        while (el && el !== document.body) {
-          if (el.classList && el.classList.contains("stButton")) {
-            el.style.cssText = "display:none!important;width:0!important;height:0!important;overflow:hidden!important;position:absolute!important;pointer-events:none!important;";
-            break;
-          }
-          el = el.parentElement;
+      if (PROXIES.indexOf(b.textContent.trim()) === -1) return;
+      b.style.cssText = "display:none!important;visibility:hidden!important;";
+      var el = b.parentElement;
+      while (el && el !== document.body) {
+        if (el.hasAttribute && (el.hasAttribute("data-testid") || (el.className && el.className.indexOf("stButton") !== -1))) {
+          el.style.cssText = "display:none!important;visibility:hidden!important;width:0!important;height:0!important;overflow:hidden!important;position:absolute!important;pointer-events:none!important;";
+          break;
         }
+        el = el.parentElement;
       }
     });
   }
 
+  /* ---------- click a hidden proxy button ---------- */
   function clickProxy(proxy) {
     var all = document.querySelectorAll("button");
     for (var i = 0; i < all.length; i++) {
       if (all[i].textContent.trim() === proxy) {
-        all[i].style.display = "";
+        // Temporarily restore so Streamlit can detect the click
+        all[i].style.cssText = "";
         all[i].click();
         return;
       }
     }
   }
 
-  // Inject #spartan-nav as the LAST child of stBottom > div
-  // so it appears below the chat input (column flex layout)
+  /* ---------- build & append the fixed nav bar ---------- */
   function inject() {
-    // Target: the direct div child of stBottom that wraps the input
-    var bottom = document.querySelector('[data-testid="stBottom"]');
-    if (!bottom) return;
-    var wrapper = bottom.querySelector(':scope > div');
-    if (!wrapper) return;
     if (document.getElementById("spartan-nav")) return;
-
     var nav = document.createElement("div");
     nav.id = "spartan-nav";
-
     BTNS.forEach(function(d) {
       var btn = document.createElement("button");
       btn.type = "button";
-      btn.title = d.label;
-      btn.innerHTML = d.svg + "<span>" + d.label + "</span>";
+      btn.innerHTML = "<span style='font-size:1rem;line-height:1'>" + d.emoji + "</span>"
+                    + "<span style='margin-left:5px'>" + d.label + "</span>";
       btn.addEventListener("click", function(e) {
         e.preventDefault(); e.stopPropagation();
         clickProxy(d.proxy);
       });
       nav.appendChild(btn);
     });
-
-    wrapper.appendChild(nav);
+    document.body.appendChild(nav);
   }
 
   function tick() { inject(); hideProxies(); }
